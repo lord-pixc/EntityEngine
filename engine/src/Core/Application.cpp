@@ -12,23 +12,30 @@ namespace EntityEngine
     Application::Application(const std::string &title, int width, int height)
         : m_IsRunning(false)
     {
+        std::cout << "[EntityEngine] Iniciando SDL...\n";
 
-        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0)
+        // SDL_Init devuelve true en éxito, false en error
+        if (!SDL_Init(SDL_INIT_VIDEO))
         {
-            std::cerr << "Error initializing SDL: " << SDL_GetError() << std::endl;
+            std::cerr << "[EntityEngine] Error inicializando SDL: "
+                      << SDL_GetError() << std::endl;
             return;
         }
 
-        // Crear la ventana
+        std::cout << "[EntityEngine] SDL inicializado OK\n";
+
         m_Window = std::make_unique<Window>(title, width, height);
-        if (!m_Window->IsValid())
+        if (!m_Window || !m_Window->IsValid())
         {
-            std::cerr << "Failed to create window." << std::endl;
+            std::cerr << "[EntityEngine] No se pudo crear la ventana.\n";
             return;
         }
+
+        std::cout << "[EntityEngine] Ventana creada OK\n";
 
         Time::Init();
         m_IsRunning = true;
+        std::cout << "[EntityEngine] Application lista, entrando a Run()...\n";
     }
 
     Application::~Application()

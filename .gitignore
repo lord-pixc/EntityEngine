@@ -97,14 +97,14 @@ tmp/
 #  THIRD PARTY LIBRARIES
 # ============================
 
-external/*/bin/
-external/*/lib/
-external/*/build/
-external/**/CMakeFiles/
-external/**/Makefile
-external/**/cmake_install.cmake
-external/**/config.log
-external/**/config.status
+# Ignora TODO dentro de la carpeta de SDL3
+external/SDL3/*
+
+# pero permite los headers (opcional) y archivos legales
+!external/SDL3/include/
+!external/SDL3/include/**
+!external/SDL3/LICENSE.txt
+!external/SDL3/README.md
 
 
 # ============================

@@ -1,0 +1,116 @@
+# ============================
+#  GENERAL BUILD FILES
+# ============================
+
+# Build folders (CMake, Make, Ninja)
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CMakeScripts/
+Testing/
+CTestTestfile.cmake
+_compile_commands.json
+
+
+# ============================
+#  COMPILERS / TOOLS
+# ============================
+
+# GCC / Clang artifacts
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+*.out
+*.exe
+*.pdb
+*.ilk
+
+# Precompiled headers
+*.gch
+*.pch
+
+# AddressSanitizer/Valgrind logs
+*.supp
+vgcore.*
+
+# ============================
+#  VISUAL STUDIO
+# ============================
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build output
+*.ncb
+*.opensdf
+*.sdf
+*.cachefile
+
+# VS cache
+.ipch/
+*.pdb
+*.idb
+*.opendb
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# ============================
+#  PLATFORM
+# ============================
+
+# Linux
+*~
+*.swp
+*.swo
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+
+# ============================
+#  ENGINE / GAME FILES
+# ============================
+
+# Logs
+logs/
+*.log
+
+# Engine-generated caches
+cache/
+temp/
+tmp/
+
+# ============================
+#  THIRD PARTY LIBRARIES
+# ============================
+
+external/*/bin/
+external/*/lib/
+external/*/build/
+external/**/CMakeFiles/
+external/**/Makefile
+external/**/cmake_install.cmake
+external/**/config.log
+external/**/config.status
+
+
+# ============================
+#  BINARIES / EXECUTABLES
+# ============================
+
+bin/
+bin-*/
+*.bin

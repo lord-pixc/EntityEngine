@@ -10,11 +10,10 @@ namespace EntityEngine
 {
 
     Application::Application(const std::string &title, int width, int height)
-        : m_IsRunning(false)
+        : m_IsRunning(false), m_SdlInitialized(false)
     {
         std::cout << "[EntityEngine] Iniciando SDL...\n";
 
-        // SDL_Init devuelve true en éxito, false en error
         if (!SDL_Init(SDL_INIT_VIDEO))
         {
             std::cerr << "[EntityEngine] Error inicializando SDL: "
@@ -22,6 +21,8 @@ namespace EntityEngine
             return;
         }
 
+        m_SdlInitialized = true;
+        std::cout << "[EntityEngine] SDL_Init successful, continuing setup.\n";
         std::cout << "[EntityEngine] SDL inicializado OK\n";
 
         m_Window = std::make_unique<Window>(title, width, height);
@@ -40,7 +41,10 @@ namespace EntityEngine
 
     Application::~Application()
     {
-        SDL_Quit();
+        if (m_SdlInitialized)
+        {
+            SDL_Quit();
+        }
     }
 
     void Application::Run()
@@ -65,6 +69,16 @@ namespace EntityEngine
                 if (event.type == SDL_EVENT_QUIT)
                 {
                     m_IsRunning = false;
+                }
+
+                if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    const int newWidth = event.window.data1;
+                    const int newHeight = event.window.data2;
+                    if (m_Window)
+                    {
+                        m_Window->UpdateSize(newWidth, newHeight);
+                    }
                 }
             }
 

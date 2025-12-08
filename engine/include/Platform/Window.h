@@ -22,6 +22,8 @@ namespace EntityEngine
         int GetWidth() const { return m_Width; }
         int GetHeight() const { return m_Height; }
 
+        void UpdateSize(int width, int height);
+
         // Punteros para OpenGL, etc.
         SDL_Window *GetNativeWindow() const { return m_Window; }
         SDL_Renderer *GetRenderer() const { return m_Renderer; }

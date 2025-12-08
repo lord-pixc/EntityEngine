@@ -63,4 +63,23 @@ namespace EntityEngine
         SDL_RenderPresent(m_Renderer);
     }
 
+    void Window::UpdateSize(int width, int height)
+    {
+        if (!m_Window)
+            return;
+
+        if (width <= 0 || height <= 0)
+        {
+            SDL_GetWindowSize(m_Window, &m_Width, &m_Height);
+        }
+
+        m_Width = width;
+        m_Height = height;
+
+        if (m_Renderer)
+        {
+            SDL_Rect viewport{0, 0, width, height};
+            SDL_SetRenderViewport(m_Renderer, &viewport);
+        }
+    }
 } // namespace EntityEngine

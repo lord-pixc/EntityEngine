@@ -19,6 +19,7 @@ namespace EntityEngine
 
     private:
         bool m_IsRunning;
+        bool m_SdlInitialized;
         std::unique_ptr<Window> m_Window;
 
         void OnUpdate(float deltaTime);

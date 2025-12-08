@@ -11,6 +11,5 @@ int main(int argc, char **argv)
     EntityEngine::Application app("EntityEngine Demo", 1280, 720);
     app.Run();
 
-    std::cout << "[Game] Saliendo. Presiona ENTER para cerrar.\n";
-    std::cin.get();
+    std::cout << "[Game] Saliendo.";
 }

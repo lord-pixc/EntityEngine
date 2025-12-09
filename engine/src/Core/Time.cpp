@@ -5,6 +5,7 @@
 namespace EntityEngine
 {
 
+    // Puntos de referencia para medir el tiempo transcurrido entre frames.
     static std::chrono::high_resolution_clock::time_point s_StartTime;
     static std::chrono::high_resolution_clock::time_point s_LastFrameTime;
     static float s_DeltaTime = 0.0f;

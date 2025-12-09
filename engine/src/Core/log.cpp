@@ -9,6 +9,7 @@ namespace EntityEngine
         s_MinLevel = level;
     }
 
+    // Convierte el enum de nivel en un texto legible para la consola.
     static const char *LevelToString(LogLevel level)
     {
         switch (level)
@@ -28,6 +29,7 @@ namespace EntityEngine
         }
     }
 
+    // Selecciona el stream de salida según la severidad.
     static std::ostream &OutputStream(LogLevel level)
     {
         if (level == LogLevel::Error || level == LogLevel::Critical)
@@ -35,11 +37,13 @@ namespace EntityEngine
         return std::cout;
     }
 
+    // Evalúa si el mensaje debe imprimirse con base en el nivel configurado.
     static bool ShouldLog(LogLevel minLevel, LogLevel msgLevel)
     {
         return static_cast<int>(msgLevel) >= static_cast<int>(minLevel);
     }
 
+    // Formatea y escribe el mensaje en el flujo adecuado.
     static void LogMessage(LogLevel level, const std::string &msg)
     {
         if (!ShouldLog(Log::s_MinLevel, level))

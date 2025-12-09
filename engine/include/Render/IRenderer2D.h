@@ -9,6 +9,13 @@ namespace EntityEngine
         std::uint8_t r, g, b, a;
     };
 
+    /**
+     * @brief Interfaz genérica para renderizadores 2D.
+     *
+     * Las implementaciones concretas (SDL, OpenGL, etc.) deben encargarse de
+     * preparar el frame, limpiarlo con un color y finalizarlo presentando el
+     * resultado en pantalla.
+     */
     class IRenderer2D
     {
     public:

@@ -14,6 +14,7 @@ namespace EntityEngine
     {
         std::cout << "[EntityEngine] Iniciando SDL...\n";
 
+        // Inicializa únicamente el subsistema de vídeo.
         if (!SDL_Init(SDL_INIT_VIDEO))
         {
             std::cerr << "[EntityEngine] Error inicializando SDL: "
@@ -25,6 +26,7 @@ namespace EntityEngine
         std::cout << "[EntityEngine] SDL_Init successful, continuing setup.\n";
         std::cout << "[EntityEngine] SDL inicializado OK\n";
 
+        // Crear la ventana principal con renderizador asociado.
         m_Window = std::make_unique<Window>(title, width, height);
         if (!m_Window || !m_Window->IsValid())
         {
@@ -34,6 +36,7 @@ namespace EntityEngine
 
         std::cout << "[EntityEngine] Ventana creada OK\n";
 
+        // Activa el reloj para medir el delta time desde el primer frame.
         Time::Init();
         m_IsRunning = true;
         std::cout << "[EntityEngine] Application lista, entrando a Run()...\n";
@@ -56,6 +59,8 @@ namespace EntityEngine
 
         while (m_IsRunning)
         {
+            // Calcula el tiempo transcurrido desde el último frame para las
+            // actualizaciones dependientes del tiempo.
             Time::Update();
             const float deltaTime = Time::GetDeltaTime();
 
@@ -63,7 +68,7 @@ namespace EntityEngine
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
-                // Aquí manejamos los de entrada
+                // Propaga los eventos a los sistemas de entrada.
                 Input::OnEvent(event);
 
                 if (event.type == SDL_EVENT_QUIT)
@@ -90,7 +95,7 @@ namespace EntityEngine
 
     void Application::OnUpdate(float deltaTime)
     {
-        // Actualizar escenas, entidades, etc.
+        // Actualizar escenas, entidades, etc. (se implementará más adelante).
     }
 
 } // namespace EntityEngine

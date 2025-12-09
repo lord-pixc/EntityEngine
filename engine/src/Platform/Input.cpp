@@ -12,6 +12,8 @@ namespace EntityEngine
 
     void Input::OnEvent(const SDL_Event &event)
     {
+        // Actualiza el estado interno en función del tipo de evento recibido
+        // para que las consultas estáticas reflejen la situación más reciente.
         switch (event.type)
         {
         case SDL_EVENT_KEY_DOWN:

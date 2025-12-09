@@ -54,12 +54,13 @@ namespace EntityEngine
         if (!m_Renderer)
             return;
 
-        // Limpiar la pantalla con un color de fondo simple
+        // Limpiar la pantalla con un color de fondo simple antes de dibujar.
         SDL_SetRenderDrawColor(m_Renderer, 20, 20, 25, 255);
         SDL_RenderClear(m_Renderer);
 
         // Aquí luego vendrán las llamadas de Render2D (sprites, etc.)
 
+        // Presenta el frame en pantalla.
         SDL_RenderPresent(m_Renderer);
     }
 

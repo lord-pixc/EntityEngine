@@ -8,6 +8,14 @@
 namespace EntityEngine
 {
 
+    /**
+     * @brief Sistema estático para consultar el estado de teclado y ratón.
+     *
+     * Debe alimentarse con los eventos SDL recibidos en el loop principal
+     * mediante OnEvent. Posteriormente puede consultarse en cualquier parte
+     * del código para saber qué teclas o botones están presionados y la
+     * posición actual del cursor.
+     */
     class Input
     {
     public:

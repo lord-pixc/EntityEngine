@@ -9,6 +9,13 @@ struct SDL_Renderer;
 namespace EntityEngine
 {
 
+    /**
+     * @brief Encapsula la creación y gestión de una ventana SDL.
+     *
+     * Gestiona el recurso SDL_Window y el SDL_Renderer asociado, así como
+     * las operaciones básicas de actualización y cambio de tamaño. No expone
+     * directamente las dependencias de SDL en la interfaz pública del engine.
+     */
     class Window
     {
     public:

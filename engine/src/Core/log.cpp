@@ -50,6 +50,7 @@ namespace EntityEngine
             return;
 
         auto &os = OutputStream(level);
+        // os puede ser std::cout o std::cerr dependiendo del nivel
         os << "[EntityEngine][" << LevelToString(level) << "] " << msg << '\n';
     }
 

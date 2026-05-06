@@ -2,6 +2,7 @@
 #include "../../include/Platform/Window.h"
 #include "../../include/Core/Time.h"
 #include "../../include/Platform/Input.h"
+#include "../../include/Core/log.h"
 
 #include <SDL3/SDL.h>
 #include <iostream>
@@ -12,34 +13,33 @@ namespace EntityEngine
     Application::Application(const std::string &title, int width, int height)
         : m_IsRunning(false), m_SdlInitialized(false)
     {
-        std::cout << "[EntityEngine] Iniciando SDL...\n";
+        EE_LOG_TRACE("Inicializando Application...");
 
         // Inicializa únicamente el subsistema de vídeo.
         if (!SDL_Init(SDL_INIT_VIDEO))
         {
-            std::cerr << "[EntityEngine] Error inicializando SDL: "
-                      << SDL_GetError() << std::endl;
+            EE_LOG_ERROR(std::string("Error inicializando SDL: ") + SDL_GetError());
             return;
         }
 
         m_SdlInitialized = true;
-        std::cout << "[EntityEngine] SDL_Init successful, continuing setup.\n";
-        std::cout << "[EntityEngine] SDL inicializado OK\n";
+        EE_LOG_TRACE("SDL_Init successful, continuing setup.");
+        EE_LOG_INFO("SDL inicializado OK");
 
         // Crear la ventana principal con renderizador asociado.
         m_Window = std::make_unique<Window>(title, width, height);
         if (!m_Window || !m_Window->IsValid())
         {
-            std::cerr << "[EntityEngine] No se pudo crear la ventana.\n";
+            EE_LOG_ERROR(" No se pudo crear la ventana.");
             return;
         }
 
-        std::cout << "[EntityEngine] Ventana creada OK\n";
+        EE_LOG_INFO("Ventana creada OK");
 
         // Activa el reloj para medir el delta time desde el primer frame.
         Time::Init();
         m_IsRunning = true;
-        std::cout << "[EntityEngine] Application lista, entrando a Run()...\n";
+        EE_LOG_TRACE("Application lista, entrando a Run()...");
     }
 
     Application::~Application()
@@ -55,7 +55,7 @@ namespace EntityEngine
         if (!m_IsRunning)
             return;
 
-        std::cout << "Application loop started." << std::endl;
+        EE_LOG_TRACE("Application loop started.");
 
         while (m_IsRunning)
         {

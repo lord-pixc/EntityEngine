@@ -1,7 +1,7 @@
 #include "../../include/Platform/Window.h"
+#include "../../include/Core/log.h"
 
 #include <SDL3/SDL.h>
-#include <iostream>
 
 namespace EntityEngine
 {
@@ -15,8 +15,7 @@ namespace EntityEngine
                                     SDL_WINDOW_RESIZABLE);
         if (!m_Window)
         {
-            std::cerr << "[EntityEngine] Error creando SDL_Window: "
-                      << SDL_GetError() << std::endl;
+            EE_LOG_ERROR(std::string("Error creando SDL_Window: ") + SDL_GetError());
             return;
         }
 
@@ -24,8 +23,7 @@ namespace EntityEngine
         m_Renderer = SDL_CreateRenderer(m_Window, nullptr);
         if (!m_Renderer)
         {
-            std::cerr << "[EntityEngine] Error creando SDL_Renderer: "
-                      << SDL_GetError() << std::endl;
+            EE_LOG_ERROR(std::string("Error creando SDL_Renderer: ") + SDL_GetError());
             SDL_DestroyWindow(m_Window);
             m_Window = nullptr;
             return;
@@ -72,10 +70,11 @@ namespace EntityEngine
         if (width <= 0 || height <= 0)
         {
             SDL_GetWindowSize(m_Window, &m_Width, &m_Height);
-        }
-
+        } else 
+        {
         m_Width = width;
         m_Height = height;
+        }
 
         if (m_Renderer)
         {

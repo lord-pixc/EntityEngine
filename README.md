@@ -46,7 +46,7 @@ Esto produce la biblioteca del motor y el ejecutable de ejemplo en `build/`.
 ## Cómo ejecutar
 Después de compilar, ejecuta el ejemplo desde la raíz del proyecto:
 ```bash
-./build/game/game
+./build/game/Game
 ```
 Si SDL no encuentra los backends de vídeo del sistema, revisa la instalación de
 las dependencias (drivers, paquetes de desarrollo o variables de entorno como

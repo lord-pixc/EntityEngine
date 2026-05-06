@@ -59,8 +59,8 @@ EntityEngine/
 │       │   ├── Input.cpp
 │       │   └── SDLWindow.cpp
 │       └── Render/
-│           └── SDLRenderer2D.h  ⚠️ (el .cpp de SDLRenderer2D está aquí,
-│                                    no en engine/src/Render/SDLRenderer2D.cpp)
+│           └── SDLRenderer2D.cpp
+│                                    
 ├── game/
 │   └── src/
 │       └── main.cpp        ← Punto de entrada del ejecutable de demo
@@ -299,12 +299,10 @@ Application::Run()
 | L1 | `Application` | `OnUpdate()` es privado y vacío. El código del juego no puede conectar lógica. | Bloqueante para cualquier juego real. |
 | L2 | `Input` | Sin frame anterior → imposible `IsKeyJustPressed`/`IsKeyJustReleased`. | Saltos, disparos, interacciones no funcionan correctamente. |
 | L3 | `Window::OnUpdate()` | Mezcla clear + present. Color de fondo hardcodeado. No usa `IRenderer2D`. | El renderer abstracto es inútil hasta resolver esto. |
-| L4 | `SDLRenderer2D` | No instanciado ni conectado. La clase existe pero no se usa. | El sistema de render está desconectado de la arquitectura. |
-| L5 | `Time` | Sin cap en deltaTime. Un spike largo (>50ms) no se limita. | Futuro sistema de física puede explotar. |
-| L6 | `Log` | Macros no se deshabilitan en Release (`NDEBUG`). | Overhead innecesario y logs en builds de distribución. |
-| L7 | `SDLRenderer2D` fuente | El `.cpp` está nombrado `.h` en `engine/src/Render/`. | Confusión en la estructura; CMake lo incluye por `GLOB_RECURSE` igualmente. |
-| L8 | General | No hay sistema de entidades, recursos, cámara, física, audio, texto. | Motor incompleto para cualquier juego. |
-| L9 | `game/main.cpp` | El include path usa ruta relativa `../../engine/include/...`. | Frágil. Debería usar las rutas públicas via `target_include_directories`. |
+| L4 | `Time` | Sin cap en deltaTime. Un spike largo (>50ms) no se limita. | Futuro sistema de física puede explotar. |
+| L5 | `Log` | Macros no se deshabilitan en Release (`NDEBUG`). | Overhead innecesario y logs en builds de distribución. |
+| L6 | General | No hay sistema de entidades, recursos, cámara, física, audio, texto. | Motor incompleto para cualquier juego. |
+| L7 | `game/main.cpp` | El include path usa ruta relativa `../../engine/include/...`. | Frágil. Debería usar las rutas públicas via `target_include_directories`. |
 
 ---
 

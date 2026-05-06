@@ -65,6 +65,10 @@ vgcore.*
 .vscode/
 *.code-workspace
 
+.agents
+.codex
+CLAUDE.md
+
 # ============================
 #  PLATFORM
 # ============================

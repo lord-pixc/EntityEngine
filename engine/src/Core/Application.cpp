@@ -3,6 +3,8 @@
 #include "../../include/Core/Time.h"
 #include "../../include/Platform/Input.h"
 #include "../../include/Core/log.h"
+#include "../../include/Render/Backend/SDLRenderer2D.h"
+
 
 #include <SDL3/SDL.h>
 #include <iostream>
@@ -33,8 +35,10 @@ namespace EntityEngine
             EE_LOG_ERROR(" No se pudo crear la ventana.");
             return;
         }
-
         EE_LOG_INFO("Ventana creada OK");
+
+        m_Renderer2D = std::make_unique<SDLRenderer2D>(m_Window->GetRenderer());
+
 
         // Activa el reloj para medir el delta time desde el primer frame.
         Time::Init();
@@ -44,6 +48,9 @@ namespace EntityEngine
 
     Application::~Application()
     {
+        m_Renderer2D.reset();
+        m_Window.reset();
+
         if (m_SdlInitialized)
         {
             SDL_Quit();
@@ -87,10 +94,16 @@ namespace EntityEngine
                 }
             }
 
-            // Actualización de la aplicación / logica del motor
             OnUpdate(deltaTime);
-            m_Window->OnUpdate();
-            Input::EndFrame(); // Llamada al final del frame para actualizar el estado de los inputs
+
+            m_Renderer2D->BeginFrame();
+            m_Renderer2D->Clear({20, 20, 25, 255});
+
+            // Aquí después irán las llamadas de render del juego/escena.
+
+            m_Renderer2D->EndFrame();
+
+            Input::EndFrame();
         }
     }
 

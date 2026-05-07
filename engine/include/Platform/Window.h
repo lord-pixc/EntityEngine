@@ -24,8 +24,6 @@ namespace EntityEngine
 
         bool IsValid() const { return m_Window != nullptr; }
 
-        void OnUpdate();
-
         int GetWidth() const { return m_Width; }
         int GetHeight() const { return m_Height; }
 

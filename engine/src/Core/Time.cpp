@@ -4,7 +4,7 @@
 
 namespace EntityEngine
 {
-
+    
     // Puntos de referencia para medir el tiempo transcurrido entre frames.
     static std::chrono::high_resolution_clock::time_point s_StartTime;
     static std::chrono::high_resolution_clock::time_point s_LastFrameTime;
@@ -40,6 +40,9 @@ namespace EntityEngine
     {
         if (s_DeltaTime <= 0.00001f)
             return 0.0f;
+
+        if (s_DeltaTime > 0.5f)
+            return 0.5f;
 
         return 1.0f / s_DeltaTime;
     }

@@ -5,8 +5,10 @@
 namespace EntityEngine
 {
 
-    std::array<bool, SDL_SCANCODE_COUNT> Input::s_Keys{};
-    std::array<bool, 5> Input::s_MouseButtons{};
+    std::array<bool, SDL_SCANCODE_COUNT> Input::s_CurrentKeys{};
+    std::array<bool, SDL_SCANCODE_COUNT> Input::s_PrevKeys{};
+    std::array<bool, 6> Input::s_MouseButtons{};
+    std::array<bool, 6> Input::s_PrevMouseButtons{};
     int Input::s_MouseX = 0;
     int Input::s_MouseY = 0;
 
@@ -21,7 +23,7 @@ namespace EntityEngine
             auto scancode = event.key.scancode;
             if (scancode >= 0 && scancode < SDL_SCANCODE_COUNT)
             {
-                s_Keys[scancode] = true;
+                s_CurrentKeys[scancode] = true;
             }
             break;
         }
@@ -30,7 +32,7 @@ namespace EntityEngine
             auto scancode = event.key.scancode;
             if (scancode >= 0 && scancode < SDL_SCANCODE_COUNT)
             {
-                s_Keys[scancode] = false;
+                s_CurrentKeys[scancode] = false;
             }
             break;
         }
@@ -63,20 +65,59 @@ namespace EntityEngine
         }
     }
 
-    bool Input::IsKeyPressed(SDL_Scancode key)
+    void Input::EndFrame()
+    {
+        // Al final de cada frame, actualizamos el estado previo para la próxima consulta.
+        s_PrevKeys = s_CurrentKeys;
+        s_PrevMouseButtons = s_MouseButtons;
+    }
+
+    // Teclado
+    bool Input::IsKeyHeld(SDL_Scancode key)
     {
         if (key < 0 || key >= SDL_SCANCODE_COUNT)
             return false;
-        return s_Keys[key];
+        return s_CurrentKeys[key];
     }
 
-    bool Input::IsMouseButtonPressed(std::uint8_t button)
+    bool Input::IsKeyJustPressed(SDL_Scancode key)
+    {
+        if (key < 0 || key >= SDL_SCANCODE_COUNT)
+            return false;
+        return s_CurrentKeys[key] && !s_PrevKeys[key];
+    }
+
+    bool Input::IsKeyJustReleased(SDL_Scancode key)
+    {
+        if (key < 0 || key >= SDL_SCANCODE_COUNT)
+            return false;
+        return !s_CurrentKeys[key] && s_PrevKeys[key];
+    }
+
+
+    // Mouse
+    bool Input::IsMouseButtonHeld(std::uint8_t button)
     {
         if (button >= s_MouseButtons.size())
             return false;
         return s_MouseButtons[button];
     }
 
+    bool Input::IsMouseButtonJustPressed(std::uint8_t button)
+    {
+        if (button >= s_MouseButtons.size())
+            return false;
+        return s_MouseButtons[button] && !s_PrevMouseButtons[button];
+    }
+
+    bool Input::IsMouseButtonJustReleased(std::uint8_t button)
+    {
+        if (button >= s_MouseButtons.size())
+            return false;
+        return !s_MouseButtons[button] && s_PrevMouseButtons[button];
+    }
+
+    // Posicion del mouse
     int Input::GetMouseX()
     {
         return s_MouseX;

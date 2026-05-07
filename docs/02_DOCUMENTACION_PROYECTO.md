@@ -173,23 +173,23 @@ podría explotar. Ver sección 5.
 **Estado almacenado:**
 | Campo | Tipo | Contenido |
 |---|---|---|
-| `s_Keys` | `array<bool, SDL_SCANCODE_COUNT>` | `true` si la tecla está pulsada |
-| `s_MouseButtons` | `array<bool, 5>` | `true` si el botón está pulsado |
+| `s_CurrentKeys`, `s_PrevKeys` | `array<bool, SDL_SCANCODE_COUNT>` | `true` si la tecla está pulsada, sea en este frame o en el anterior |
+| `s_CurrentMouseButtons`, `s_PrevMouseButtons` | `array<bool, 5>` | `true` si el botón está pulsado, sea en este frame o en el anterior |
 | `s_MouseX`, `s_MouseY` | `int` | Posición actual del cursor |
 
 **Eventos manejados:**
-- `SDL_EVENT_KEY_DOWN` / `SDL_EVENT_KEY_UP` → actualiza `s_Keys[scancode]`
-- `SDL_EVENT_MOUSE_BUTTON_DOWN` / `SDL_EVENT_MOUSE_BUTTON_UP` → actualiza `s_MouseButtons[button]`
+- `SDL_EVENT_KEY_DOWN` / `SDL_EVENT_KEY_UP` → actualiza `s_CurrentKeys[scancode]`
+- `SDL_EVENT_MOUSE_BUTTON_DOWN` / `SDL_EVENT_MOUSE_BUTTON_UP` → actualiza `s_CurrentMouseButtons[button]`
 - `SDL_EVENT_MOUSE_MOTION` → actualiza `s_MouseX`, `s_MouseY`
 
-**Limitación crítica:** solo almacena el estado del frame actual.
+~~**Limitación crítica:** solo almacena el estado del frame actual.
 No hay `s_PrevKeys[]` → no es posible implementar `IsKeyJustPressed()` ni
 `IsKeyJustReleased()`. Esto limita cualquier lógica de juego que necesite
-reaccionar a un solo evento de pulsación (saltos, disparos, interacciones).
+reaccionar a un solo evento de pulsación (saltos, disparos, interacciones).~~
 
 **Nota de botones de ratón en SDL3:** SDL usa `SDL_BUTTON_LEFT = 1`,
 `SDL_BUTTON_MIDDLE = 2`, `SDL_BUTTON_RIGHT = 3`. El índice 0 del array nunca
-se usa.
+se usa. Se usa un array de 6 para dejar espacio para los 2 botones laterales
 
 ---
 
@@ -297,7 +297,7 @@ Application::Run()
 | ID | Sistema | Problema | Impacto |
 |---|---|---|---|
 | L1 | `Application` | `OnUpdate()` es privado y vacío. El código del juego no puede conectar lógica. | Bloqueante para cualquier juego real. |
-| L2 | `Input` | Sin frame anterior → imposible `IsKeyJustPressed`/`IsKeyJustReleased`. | Saltos, disparos, interacciones no funcionan correctamente. |
+| L2 | ~~`Input`~~ | ~~Sin frame anterior → imposible `IsKeyJustPressed`/`IsKeyJustReleased`.~~ |~~Saltos, disparos, interacciones no funcionan correctamente.~~|
 | L3 | `Window::OnUpdate()` | Mezcla clear + present. Color de fondo hardcodeado. No usa `IRenderer2D`. | El renderer abstracto es inútil hasta resolver esto. |
 | L4 | `Time` | Sin cap en deltaTime. Un spike largo (>50ms) no se limita. | Futuro sistema de física puede explotar. |
 | L5 | `Log` | Macros no se deshabilitan en Release (`NDEBUG`). | Overhead innecesario y logs en builds de distribución. |

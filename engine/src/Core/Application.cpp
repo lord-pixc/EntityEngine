@@ -15,7 +15,7 @@ namespace EntityEngine
     {
         EE_LOG_TRACE("Inicializando Application...");
 
-        // Inicializa únicamente el subsistema de vídeo.
+        // Inicializa unicamente el subsistema de vídeo.
         if (!SDL_Init(SDL_INIT_VIDEO))
         {
             EE_LOG_ERROR(std::string("Error inicializando SDL: ") + SDL_GetError());
@@ -90,6 +90,7 @@ namespace EntityEngine
             // Actualización de la aplicación / logica del motor
             OnUpdate(deltaTime);
             m_Window->OnUpdate();
+            Input::EndFrame(); // Llamada al final del frame para actualizar el estado de los inputs
         }
     }
 

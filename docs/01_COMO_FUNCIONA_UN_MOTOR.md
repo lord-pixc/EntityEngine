@@ -68,11 +68,12 @@ while (running) {
 Un personaje que se mueve a 100 píxeles/segundo calculará:
 `position += 100 * dt`
 
-A 60 FPS: `dt ≈ 0.0167s` → mueve 1.67 píxeles por frame.  
-A 120 FPS: `dt ≈ 0.0083s` → mueve 0.83 píxeles por frame.  
+A 60 FPS: `dt ≈ 0.0167s` → mueve 1.67 píxeles por frame.
+A 120 FPS: `dt ≈ 0.0083s` → mueve 0.83 píxeles por frame.
 En ambos casos, 100 píxeles avanzados por segundo real. Correcto.
 
-**Problema: el spike de deltaTime.**  
+#### Problema: el spike de deltaTime.
+
 Si el sistema operativo interrumpe el proceso 200ms (antivirus, actualización,
 GC de Java en segundo plano), el siguiente `dt` será 0.2s. El personaje saltaría
 20 píxeles de golpe y podría atravesar una pared de 5 píxeles de grosor.
@@ -113,33 +114,36 @@ while (running) {
 }
 ```
 
-**La espiral de la muerte:** si `physicsUpdate` tarda más que `FIXED_DT`, el
+La espiral de la muerte: si `physicsUpdate` tarda más que `FIXED_DT`, el
 acumulador crece más rápido de lo que se vacía. El cap de 50ms (o similar)
 rompe ese ciclo a costa de ralentizar la simulación en frames muy pesados.
 
-**Por qué separar física de render:**  
+#### Por qué separar física de render
+
 - La física necesita pasos fijos para ser determinista (replays, multijugador).
 - El render puede correr a cualquier frecuencia (60, 144, 240 FPS).
 - Con interpolación (`lerp(prevPos, currentPos, alpha)`), el render es suave
   incluso si la física corre más lento que el display.
 
-**Timesteps típicos en la industria:**
-| Juego/Motor | Física | Render |
-|---|---|---|
-| Unity (default) | 50 Hz (0.02s) | Variable o vsync |
-| Godot | 60 Hz (configurable) | Variable |
-| Unreal Engine | 60 Hz | Variable |
-| Box2D recomendado | 60–120 Hz | Variable |
+#### Timesteps típicos en la industria
+
+| Juego/Motor       | Física               | Render           |
+| ----------------- | -------------------- | ---------------- |
+| Unity (default)   | 50 Hz (0.02s)        | Variable o vsync |
+| Godot             | 60 Hz (configurable) | Variable         |
+| Unreal Engine     | 60 Hz                | Variable         |
+| Box2D recomendado | 60–120 Hz            | Variable         |
 
 ---
 
 ### 1.4 Frame rate limiting y VSync
 
-**VSync (Vertical Sync):** el renderer espera el barrido vertical del monitor
+VSync (Vertical Sync): el renderer espera el barrido vertical del monitor
 antes de presentar el frame. Elimina el "tearing" (ver dos frames parciales
 a la vez) a costa de latencia añadida. SDL3: `SDL_SetRenderVSync(renderer, 1)`.
 
-**Frame rate cap sin VSync:**
+#### Frame rate cap sin VSync
+
 ```cpp
 const float TARGET_FPS = 60.0f;
 const float MIN_FRAME_TIME = 1.0f / TARGET_FPS;
@@ -162,7 +166,7 @@ importante para portátiles y dispositivos móviles.
 
 El orden importa. La secuencia estándar:
 
-```
+```txt
 1. Procesar eventos del SO (ventana, input crudo)
 2. Actualizar estado de input (JustPressed, JustReleased)
 3. Time::Update() — calcular deltaTime
@@ -177,7 +181,7 @@ El orden importa. La secuencia estándar:
 11. Input::EndFrame() — copiar estado actual a estado previo
 ```
 
-**Por qué LateUpdate:** si la cámara sigue al jugador y ambos se actualizan en
+Por qué LateUpdate: si la cámara sigue al jugador y ambos se actualizan en
 `Update`, puede haber un frame de lag visual dependiendo del orden de ejecución.
 `LateUpdate` garantiza que la cámara se posicione DESPUÉS de que todas las
 entidades se hayan movido.
@@ -206,7 +210,7 @@ cache caliente.
 Pre-asigna un bloque grande y lo divide en slots fijos. Ideal para objetos del
 mismo tipo (entidades, partículas, componentes):
 
-```
+```txt
 [ slot 0 | slot 1 | slot 2 | slot 3 | ... | slot N ]
      ↑         ↑
   ocupado    libre (enlazado en lista libre)
@@ -241,7 +245,7 @@ public:
 Para datos temporales que solo viven un frame (listas de render, strings de debug,
 eventos temporales), un allocator lineal es óptimo:
 
-```
+```txt
 [  datos  |  datos  |  datos  |           libre          ]
  ↑                             ↑
 inicio                       cursor
@@ -257,7 +261,8 @@ fragmentación, no hay overhead de `free()` individual.
 
 ### 2.4 SoA vs AoS (Structure of Arrays vs Array of Structures)
 
-**AoS (Array of Structures) — el patrón OOP habitual:**
+#### AoS (Array of Structures) — el patrón OOP habitual
+
 ```cpp
 struct Entity {
     float x, y;       // posición
@@ -268,11 +273,12 @@ struct Entity {
 Entity entities[1000];
 ```
 
-Para actualizar posiciones: `entities[i].x += entities[i].vx * dt`  
+Para actualizar posiciones: `entities[i].x += entities[i].vx * dt`
 El CPU carga 64+ bytes por entidad aunque solo necesita 16 bytes (x, y, vx, vy).
 El resto (sprite, collider) es ruido que desperdicia líneas de caché.
 
-**SoA (Structure of Arrays) — el patrón ECS/SIMD:**
+#### SoA (Structure of Arrays) — el patrón ECS/SIMD
+
 ```cpp
 struct PositionSystem {
     float x[1000];
@@ -296,21 +302,21 @@ Este es el principio fundamental detrás del ECS orientado a datos.
 
 Todo lo que se dibuja pasa por estas etapas en la GPU:
 
-```
+```txt
 Vértices → [Vertex Shader] → Ensamblado de primitivas → Rasterización
          → [Fragment/Pixel Shader] → Tests (depth, stencil) → Framebuffer
 ```
 
-**Vertex Shader:** transforma posiciones de "espacio local" a "espacio de clip"
+Vertex Shader: transforma posiciones de "espacio local" a "espacio de clip"
 aplicando las matrices Model * View * Projection.
 
-**Rasterización:** convierte los triángulos matemáticos en fragmentos (píxeles
+Rasterización: convierte los triángulos matemáticos en fragmentos (píxeles
 candidatos). Interpola los atributos del vértice (UV, color, normal) a cada píxel.
 
-**Fragment Shader:** determina el color final de cada píxel. Aquí viven los
+Fragment Shader: determina el color final de cada píxel. Aquí viven los
 efectos: texturas, iluminación, shadows, etc.
 
-**En SDL2/SDL3:** todo esto está oculto. SDL usa el pipeline de la GPU
+En SDL2/SDL3: todo esto está oculto. SDL usa el pipeline de la GPU
 internamente pero no lo expone. En OpenGL y Vulkan tienes control total.
 
 ---
@@ -319,7 +325,7 @@ internamente pero no lo expone. En OpenGL y Vulkan tienes control total.
 
 En 3D (y 2D homogéneo) toda transformación es una multiplicación de matrices 4×4:
 
-```
+```txt
 Posición final en pantalla = Projection * View * Model * localPosition
 ```
 
@@ -331,12 +337,14 @@ Posición final en pantalla = Projection * View * Model * localPosition
   (aplica perspectiva en 3D, o proyección ortográfica en 2D).
 
 En 2D sin perspectiva, la Projection es ortográfica:
-```
+
+```txt
 | 2/W   0    0  -1 |
 |  0   2/H   0  -1 |
 |  0    0    1   0 |
 |  0    0    0   1 |
 ```
+
 Donde W y H son las dimensiones de la ventana. Transforma píxeles a NDC [-1, 1].
 
 ---
@@ -346,15 +354,15 @@ Donde W y H son las dimensiones de la ventana. Transforma píxeles a NDC [-1, 1]
 En 2D no hay depth buffer real (o no se usa), pero el orden de dibujado define
 qué aparece encima. Los motores 2D usan varias estrategias:
 
-**Sort por Z explícito:** cada sprite tiene un valor Z. Antes de renderizar se
+Sort por Z explícito: cada sprite tiene un valor Z. Antes de renderizar se
 ordena la lista de sprites por Z ascendente (primero fondo, luego personajes,
 luego primer plano). Coste: O(N log N) por frame.
 
-**Capas de render:** grupos predefinidos (`Background`, `Terrain`, `Characters`,
+Capas de render: grupos predefinidos (`Background`, `Terrain`, `Characters`,
 `FX`, `UI`). Dentro de cada capa puede haber un Z relativo. Más predecible que
 un Z global.
 
-**Painter's algorithm:** dibujar de atrás hacia adelante. Simple pero no maneja
+Painter's algorithm: dibujar de atrás hacia adelante. Simple pero no maneja
 ciclos (objeto A delante de B, B delante de A al mismo tiempo).
 
 ---
@@ -365,21 +373,23 @@ Cada `DrawCall` (llamada a `glDrawArrays` o `SDL_RenderTexture`) tiene un
 overhead fijo en la CPU (~0.1ms) y en el bus CPU↔GPU. Con 500 sprites
 independientes: 500 drawcalls = posible bottleneck.
 
-**Batching manual (el estándar en 2D):**
+#### Batching manual (el estándar en 2D)
 
 1. Acumular geometría en un buffer de vértices en CPU:
-   ```
+
+```txt
    [ quad0_v0, quad0_v1, quad0_v2, quad0_v3,  quad1_v0, ... ]
    ```
+
 2. Si el siguiente sprite usa la MISMA textura/shader: añadirlo al buffer.
 3. Si cambia textura: hacer flush (enviar el buffer acumulado a GPU en UN drawcall),
    luego empezar nuevo buffer.
 
-**Texture Atlas:** agrupar todas las imágenes en una sola textura grande hace que
+Texture Atlas: agrupar todas las imágenes en una sola textura grande hace que
 el batch nunca se rompa por cambio de textura. El motor solo hace 1-2 drawcalls
 para todo el mundo.
 
-**Instanced rendering (GPU instancing):** en lugar de enviar geometría repetida,
+Instanced rendering (GPU instancing): en lugar de enviar geometría repetida,
 se envía la geometría UNA vez y una lista de transformaciones. La GPU replica
 internamente. Ideal para partículas o tiles idénticos.
 
@@ -389,10 +399,11 @@ internamente. Ideal para partículas o tiles idénticos.
 
 Solo relevante para 3D con iluminación, pero importante entenderlo para el futuro:
 
-**Forward rendering:** por cada fragmento, calcular el aporte de TODAS las luces.
+Forward rendering: por cada fragmento, calcular el aporte de TODAS las luces.
 `O(fragmentos × luces)`. Simple. Para pocos objetos y pocas luces.
 
-**Deferred rendering:** separar geometría de iluminación en dos pasadas.
+Deferred rendering: separar geometría de iluminación en dos pasadas.
+
 1. Geometry Pass: renderizar posición, normal, albedo a un G-Buffer (varias texturas).
 2. Lighting Pass: por cada luz, leer el G-Buffer y calcular solo los fragmentos
    afectados. `O(fragmentos de luz × 1)`.
@@ -407,10 +418,12 @@ Un concepto moderno (introducido por Frostbite en 2017, adoptado por todos los
 motores grandes) para gestionar la complejidad de pasos de render:
 
 El render graph es un grafo dirigido acíclico (DAG) donde:
+
 - Los **nodos** son pasos de render (Shadow Pass, GBuffer Pass, Lighting Pass, TAA, Bloom, UI...).
 - Las **aristas** son texturas/buffers que fluyen de un paso al siguiente.
 
 El sistema:
+
 1. Recibe la declaración de todos los pasos y sus dependencias.
 2. Calcula automáticamente qué recursos necesita crear/destruir.
 3. Reordena y paraleliza pasos que no tienen dependencia entre sí.
@@ -424,20 +437,23 @@ Para un motor 2D simple esto es innecesario. Para 3D con post-process es esencia
 
 Entender estos niveles de abstracción es crucial para diseñar bien el backend:
 
-**SDL3 Renderer:**
+#### SDL3 Renderer
+
 - API de alto nivel. "Dibuja este sprite en esta posición."
 - SDL decide internamente cómo usar la GPU (puede usar Metal, D3D12, Vulkan, OpenGL).
 - Sin acceso a shaders propios (en el modo renderer estándar).
 - Ideal para prototipado y 2D simple.
 
-**OpenGL 4.x (Core Profile):**
+#### OpenGL 4.x (Core Profile)
+
 - API de medio nivel. Control de shaders, buffers, texturas.
 - Estado global ("estado de máquina"): cada llamada modifica un estado global
   en el driver, que persiste hasta que lo cambies. Difícil de paralelizar.
 - El driver hace mucha optimización invisible (puede reordenar comandos, compilar
   shaders en background). Conveniente pero poco predecible.
 
-**Vulkan:**
+#### Vulkan
+
 - API de bajo nivel. Control total de la GPU.
 - Sin estado global. Todos los comandos van a Command Buffers explícitos.
 - La sincronización es responsabilidad tuya (semáforos, fences, barriers).
@@ -445,7 +461,7 @@ Entender estos niveles de abstracción es crucial para diseñar bien el backend:
 - Mucho más verboso (crear un triángulo toma ~800 líneas), pero predecible y eficiente.
 - Permite CPU/GPU overlap: mientras la GPU ejecuta el frame N, la CPU prepara el frame N+1.
 
-**Regla práctica:** OpenGL es 10× más código que SDL. Vulkan es 10× más código
+Regla práctica: OpenGL es 10× más código que SDL. Vulkan es 10× más código
 que OpenGL. El control adicional solo vale la pena para juegos AAA o cuando
 el renderer SDL/GL es el cuello de botella.
 
@@ -457,7 +473,7 @@ el renderer SDL/GL es el cuello de botella.
 
 La herencia profunda de OOP es un antipatrón conocido en game dev:
 
-```
+```txt
 GameObject
   └─ Actor
        ├─ Player
@@ -470,6 +486,7 @@ GameObject
 ```
 
 Problemas:
+
 - El "diamond problem": si `FlyingArmordEnemy` hereda de `FlyingEnemy` y
   `ArmordGroundEnemy`, ¿cuál `update()` llama?
 - Jerarquías rígidas: añadir una nueva capacidad (ej: "puede nadar") requiere
@@ -482,8 +499,9 @@ Problemas:
 
 La solución más usada en motores 2D y juegos pequeños/medianos.
 
-**Estructura:**
-```
+#### Estructura
+
+```txt
 Scene
  ├─ Entity "World"
  │    ├─ Entity "Background" [SpriteComponent]
@@ -493,7 +511,8 @@ Scene
       └─ Entity "HealthBar"  [UIComponent]
 ```
 
-**Transformaciones jerárquicas:**
+#### Transformaciones jerárquicas
+
 Cada entidad tiene una transformación local. La transformación mundial se calcula
 multiplicando hacia arriba en el árbol:
 
@@ -504,7 +523,7 @@ glm::mat3 Entity::GetWorldTransform() const {
 }
 ```
 
-**Dirty flag pattern:** recalcular la transformación mundial en cada frame es
+Dirty flag pattern: recalcular la transformación mundial en cada frame es
 caro si el árbol es grande. Se usa un flag `isDirty`. Cuando un nodo se mueve,
 se marca a sí mismo y a todos sus descendientes como dirty. La transformación
 solo se recalcula cuando se pide Y el nodo está dirty.
@@ -554,12 +573,12 @@ class MovementSystem {
 };
 ```
 
-**Archetype-based ECS (el modelo más eficiente, usado por Unity DOTS y Bevy):**
+#### Archetype-based ECS (el modelo más eficiente, usado por Unity DOTS y Bevy)
 
 Las entidades con los mismos componentes se agrupan en un "archetype". Cada
 archetype almacena sus componentes en arrays contiguos separados:
 
-```
+```txt
 Archetype [Position, Velocity, Sprite]:
   positions: [p0, p1, p2, p3, ...]  ← array contiguo
   velocities:[v0, v1, v2, v3, ...]  ← array contiguo
@@ -573,16 +592,16 @@ Archetype [Position, Sprite]:        ← sin velocidad
 Un sistema que necesita `Position + Velocity` itera los archivos que los contengan.
 El acceso es perfectamente secuencial en memoria → máximo rendimiento de caché.
 
-**¿Cuándo usar ECS vs Scene Graph?**
+#### ¿Cuándo usar ECS vs Scene Graph?
 
-| Criterio | Scene Graph | ECS |
-|---|---|---|
-| < 500 entidades | ✅ Suficiente | ✅ Suficiente |
-| 10.000+ entidades | ⚠️ Puede ser lento | ✅ Diseñado para esto |
-| Jerarquía padre-hijo | ✅ Natural | ⚠️ Complicado |
-| Lerning curve | Baja | Alta |
-| Herramientas de debug | Fácil de visualizar | Más difícil |
-| Uso en industria 2D | Godot, Cocos2d, Unity 2D | Unity DOTS, Bevy, EnTT |
+| Criterio              | Scene Graph              | ECS                    |
+| --------------------- | ------------------------ | ---------------------- |
+| < 500 entidades       | ✅ Suficiente            | ✅ Suficiente          |
+| 10.000+ entidades     | ⚠️ Puede ser lento       | ✅ Diseñado para esto  |
+| Jerarquía padre-hijo  | ✅ Natural               | ⚠️ Complicado          |
+| Lerning curve         | Baja                     | Alta                   |
+| Herramientas de debug | Fácil de visualizar      | Más difícil            |
+| Uso en industria 2D   | Godot, Cocos2d, Unity 2D | Unity DOTS, Bevy, EnTT |
 
 ---
 
@@ -591,12 +610,13 @@ El acceso es perfectamente secuencial en memoria → máximo rendimiento de cach
 Con muchas entidades, preguntar "¿qué entidades están cerca de X?" es O(N) si
 se comprueba contra todas. Los sistemas espaciales reducen esto:
 
-**Quadtree (para 2D):**
+#### Quadtree (para 2D)
+
 Divide el espacio recursivamente en 4 cuadrantes. Cada nodo almacena entidades
 dentro de su área. Consultar una región: bajar por los nodos que se solapan,
 ignorar ramas enteras que no intersectan.
 
-```
+```txt
 ┌───────┬───────┐
 │  NW   │  NE   │  Si buscas entidades en la esquina NE,
 │   *   │  *  * │  solo visitas el nodo NE y sus hijos.
@@ -606,12 +626,12 @@ ignorar ramas enteras que no intersectan.
 └───────┴───────┘
 ```
 
-**Spatial Hash Grid:** divide el mundo en celdas de tamaño fijo. Cada entidad
+Spatial Hash Grid: divide el mundo en celdas de tamaño fijo. Cada entidad
 se registra en la celda correspondiente. Consultar vecinos: obtener las 9 celdas
 alrededor del punto. O(1) promedio. Más simple que quadtree, ideal para entidades
 de tamaño similar.
 
-**AABB Tree / BVH (Bounding Volume Hierarchy):** estructura para física y raycast.
+AABB Tree / BVH (Bounding Volume Hierarchy): estructura para física y raycast.
 Árboles binarios de cajas envolventes. Usado por Box2D, Bullet, Unreal.
 
 ---
@@ -624,46 +644,53 @@ La física simula el movimiento aplicando fuerzas que se acumulan en aceleració
 velocidad y posición con el tiempo. Esto es una ODE (Ordinary Differential
 Equation). Los motores la resuelven numéricamente:
 
-**Euler explícito (el más simple, el peor):**
+#### Euler explícito (el más simple, el peor)
+
 ```cpp
 velocity += acceleration * dt;
 position += velocity * dt;
 ```
+
 Error de primer orden: la posición diverge de la solución real con el tiempo.
 A dt grande se vuelve inestable (la velocidad crece sin límite). NO recomendado
 para física real.
 
-**Symplectic Euler (Semi-Implicit Euler):**
+#### Symplectic Euler (Semi-Implicit Euler)
+
 ```cpp
 velocity += acceleration * dt;   // igual que Euler
 position += velocity * dt;       // usa la velocidad YA actualizada
 ```
+
 Pequeño cambio, gran diferencia: este método es **simplécticamente correcto**,
 conserva la energía en sistemas sin fricción. Es lo que usan Box2D y la mayoría
 de motores de juego. Simple y estable.
 
-**Verlet (posición):**
+#### Verlet (posición)
+
 ```cpp
 newPosition = 2*position - prevPosition + acceleration * dt*dt;
 prevPosition = position;
 position = newPosition;
 ```
+
 No almacena velocidad explícitamente. La velocidad está implícita en la diferencia
 de posiciones. Muy estable. Usado en cloth simulation y partículas.
 
-**Runge-Kutta 4 (RK4):**
+#### Runge-Kutta 4 (RK4)
+
 Evalúa la función 4 veces por paso. Error de cuarto orden. Mucho más preciso que
 Euler pero 4× más caro. Necesario solo cuando la precisión importa más que
 la velocidad (simulaciones científicas, no juegos).
 
-**Veredicto para juegos:** Symplectic Euler con timestep fijo es el estándar.
+Veredicto para juegos: Symplectic Euler con timestep fijo es el estándar.
 Es lo suficientemente estable y preciso para la mayoría de juegos, y muy barato.
 
 ---
 
 ### 5.2 Detección de colisiones: tres fases
 
-**Broad Phase (descartar rápidamente):**
+#### Broad Phase (descartar rápidamente)
 
 El objetivo es reducir los pares de objetos a comprobar de O(N²) a O(N log N)
 o menos. Solo objetos que podrían estar cerca se pasan a la siguiente fase.
@@ -678,24 +705,29 @@ o menos. Solo objetos que podrían estar cerca se pasan a la siguiente fase.
 - **Dynamic AABB Tree (Bounding Volume Hierarchy):** árbol binario de AABBs.
   Box2D usa este método. Inserción O(log N), query O(log N + resultados).
 
-**Midphase (formas simplificadas):**  
+#### Midphase (formas simplificadas)
+
 Comprueba las formas de colisión simplificadas (AABB, OBB, esferas) de los
 candidatos del broad phase. Elimina pares evidentemente no colisionantes sin
 llegar al test exacto.
 
-**Narrow Phase (test exacto):**
+#### Narrow Phase (test exacto)
 
 - **AABB vs AABB:**
-  ```
+
+```txt
   overlap = (ax1 < bx2 && ax2 > bx1) && (ay1 < by2 && ay2 > by1)
   ```
+
   O(1). La más barata. Suficiente para muchos juegos 2D.
 
 - **Círculo vs Círculo:**
-  ```
+
+```txt
   dist² = (cx1-cx2)² + (cy1-cy2)²
   overlap = dist² < (r1+r2)²
   ```
+
   Sin raíz cuadrada = muy barato.
 
 - **SAT (Separating Axis Theorem):** para polígonos convexos arbitrarios.
@@ -712,7 +744,7 @@ llegar al test exacto.
 
 Detectar que dos objetos se tocan no basta: hay que reaccionar correctamente.
 
-**MTV (Minimum Translation Vector):** el vector más corto que separa los dos
+MTV (Minimum Translation Vector): el vector más corto que separa los dos
 objetos. Mover cada objeto la mitad del MTV en direcciones opuestas.
 
 ```cpp
@@ -725,19 +757,22 @@ else {
 }
 ```
 
-**Resolución por impulso (impulse-based resolution):**
+#### Resolución por impulso (impulse-based resolution)
+
 Más realista que solo separar los objetos. Calcula el impulso necesario para
 cambiar las velocidades de forma que la velocidad relativa en el punto de contacto
 sea cero (o negativa en caso de rebote):
 
-```
+```txt
 j = -(1 + restitution) * relativeVelocity · normal
     ────────────────────────────────────────────────
            1/massA + 1/massB
 ```
+
 Donde `restitution` es el coeficiente de rebote (0 = inelástico, 1 = elástico).
 
-**Continuous Collision Detection (CCD) — el problema del tunneling:**
+#### Continuous Collision Detection (CCD) — el problema del tunneling
+
 Si un objeto se mueve muy rápido, puede atravesar una pared fina en un solo frame.
 La solución es hacer un "sweep" del área barrida por el objeto durante el frame
 y detectar la primera colisión.
@@ -766,11 +801,11 @@ restricciones se satisfacen aproximadamente.
 
 ### 6.1 Polling vs eventos
 
-**Event-based (SDL, Windows WM):** el OS notifica cuándo cambia el estado de
+Event-based (SDL, Windows WM): el OS notifica cuándo cambia el estado de
 un dispositivo. El motor debe procesar estos eventos en el game loop. Más
 reactivo, no pierde eventos entre frames.
 
-**Polling (XInput, raw input):** el motor pregunta directamente al dispositivo
+Polling (XInput, raw input): el motor pregunta directamente al dispositivo
 su estado actual. Más simple pero puede perder pulsaciones muy cortas (un
 botón pulsado y soltado entre dos polls).
 
@@ -810,6 +845,7 @@ Los juegos no deberían tener `if (IsKeyPressed(SCANCODE_SPACE)) jump()`.
 Deberían tener `if (actions.IsPressed("Jump")) jump()`.
 
 Por qué:
+
 - Permite remapeo de controles sin tocar código de juego.
 - La misma acción puede tener múltiples bindings (Space Y botón A del gamepad).
 - Los presets de controles (WASD vs ZQSD para teclados AZERTY) son triviales.
@@ -844,7 +880,8 @@ float ApplyDeadzone(float value, float deadzone) {
 }
 ```
 
-**Dead zone radial vs axial:**
+#### Dead zone radial vs axial
+
 - Axial: aplicar la dead zone por separado a X e Y. Produce un cuadrado central
   muerto; movimientos en diagonal tienen el radio muerto distorsionado.
 - Radial: calcular la magnitud del vector, aplicar la dead zone a la magnitud,
@@ -856,7 +893,7 @@ float ApplyDeadzone(float value, float deadzone) {
 
 Técnicas de "game feel" que hacen el input más responsivo:
 
-**Coyote time:** dar al jugador un pequeño margen de tiempo después de salir
+Coyote time: dar al jugador un pequeño margen de tiempo después de salir
 de un borde para poder saltar. Si el jugador presiona salto hasta 100ms después
 de salir de una plataforma, el salto se ejecuta igualmente:
 
@@ -871,7 +908,7 @@ if (isGrounded && jumpBuffered && timeSinceJumpBuffer < JUMP_BUFFER_TIME)
     Jump();
 ```
 
-**Jump buffer:** si el jugador presiona salto 80ms antes de aterrizar, el salto
+Jump buffer: si el jugador presiona salto 80ms antes de aterrizar, el salto
 se ejecuta tan pronto como el personaje toca el suelo. Elimina la frustración de
 presionar salto "demasiado pronto".
 
@@ -912,6 +949,7 @@ void audioCallback(void* userdata, uint8_t* stream, int len) {
 ```
 
 Esta función corre en un **thread de audio** separado del game loop. Esto implica:
+
 - No puedes acceder a datos del juego desde aquí sin sincronización.
 - El audio buffer tiene una latencia inherente: lo que se escribe aquí se
   escuchará ~10-20ms después.
@@ -939,7 +977,7 @@ void Mix(int16_t* output, int numSamples) {
 }
 ```
 
-**Volume, pitch, loop:** el volumen es un multiplicador del sample. El pitch
+Volume, pitch, loop: el volumen es un multiplicador del sample. El pitch
 es una alteración del sample rate (leer muestras más rápido = tono más agudo).
 Para loop, se reinicia el cursor al final del buffer.
 
@@ -949,13 +987,15 @@ Para loop, se reinicia el cursor al final del buffer.
 
 Para simular sonido posicional en 2D (escuchar de dónde viene algo):
 
-**Atenuación por distancia:**
+#### Atenuación por distancia
+
 ```cpp
 float distanceSq = (listenerPos - sourcePos).LengthSq();
 float volume = 1.0f / (1.0f + distanceSq / (maxRange * maxRange));
 ```
 
-**Panning estéreo:**
+#### Panning estéreo
+
 ```cpp
 float angle = atan2(sourcePos.y - listenerPos.y, sourcePos.x - listenerPos.x);
 float pan = cos(angle - listenerDirection);  // -1 = izquierda, +1 = derecha
@@ -969,7 +1009,7 @@ rightVolume = volume * (1.0f + pan) * 0.5f;
 
 ### 8.1 El ciclo de vida de un activo
 
-```
+```txt
 Archivo en disco → Carga (I/O) → Decodificación (CPU) → Upload a GPU → En uso
                                                                          ↓
                                Liberación de GPU ← Descarga ← Ya no referenciado
@@ -982,21 +1022,25 @@ Cada paso tiene un coste. Los motores intentan hacer la carga **asíncrona**
 
 ### 8.2 Handle system vs shared_ptr
 
-**Con `shared_ptr`:** 
+#### Con `shared_ptr`
+
 ```cpp
 auto texture = resourceManager.Load<Texture>("player.png");
 // shared_ptr mantiene el recuento de referencias
 // cuando el último shared_ptr se destruye, la textura se descarga
 ```
+
 Simple pero tiene overhead de atomic reference counting y puede causar
 descarga accidental si se guarda en el stack (scope pequeño).
 
-**Con handles opacos:**
+#### Con handles opacos
+
 ```cpp
 TextureHandle hTex = resourceManager.Load("player.png");
 // hTex es un entero. La vida de la textura la gestiona el ResourceManager.
 resourceManager.Release(hTex);  // explícito
 ```
+
 Más control. El motor puede mover activos en memoria sin invalidar handles.
 Permite sistemas de hot-reload más robustos.
 
@@ -1053,7 +1097,8 @@ struct Camera2D {
 };
 ```
 
-**Transformación mundo → pantalla:**
+#### Transformación mundo → pantalla
+
 ```cpp
 glm::vec2 WorldToScreen(glm::vec2 worldPos) {
     glm::vec2 relative = worldPos - camera.position;
@@ -1064,7 +1109,8 @@ glm::vec2 WorldToScreen(glm::vec2 worldPos) {
 }
 ```
 
-**Transformación pantalla → mundo (para mouse picking):**
+#### Transformación pantalla → mundo (para mouse picking)
+
 ```cpp
 glm::vec2 ScreenToWorld(glm::vec2 screenPos) {
     glm::vec2 relative = screenPos - viewport * 0.5f;
@@ -1079,22 +1125,26 @@ glm::vec2 ScreenToWorld(glm::vec2 screenPos) {
 
 Una cámara que sigue al jugador sin cortes bruscos:
 
-**Lerp directo (el más simple):**
+#### Lerp directo (el más simple)
+
 ```cpp
 camera.position = glm::mix(camera.position, target.position, smoothSpeed * dt);
 ```
+
 Rápido al principio, más lento cuando se acerca. Nunca llega exactamente al target.
 
-**Camera bounds (límites del nivel):**
+#### Camera bounds (límites del nivel)
+
 ```cpp
-camera.position.x = std::clamp(camera.position.x, 
+camera.position.x = std::clamp(camera.position.x,
     viewport.x * 0.5f / zoom,               // borde izquierdo
     levelWidth - viewport.x * 0.5f / zoom   // borde derecho
 );
 ```
 
-**Lookahead:** la cámara mira ligeramente en la dirección de movimiento del
+Lookahead: la cámara mira ligeramente en la dirección de movimiento del
 jugador, dando más información visual de lo que viene:
+
 ```cpp
 glm::vec2 lookahead = player.velocity * LOOKAHEAD_FACTOR;
 glm::vec2 targetPos = player.position + lookahead;
@@ -1172,7 +1222,7 @@ struct Animator {
 En lugar de cambiar animaciones manualmente, se define una máquina de estados
 donde las transiciones ocurren automáticamente al cumplirse condiciones:
 
-```
+```txt
 [Idle] ─── moving == true ──→ [Walk]
 [Walk] ─── moving == false ─→ [Idle]
 [Walk] ─── jump == true ────→ [Jump]
@@ -1231,6 +1281,7 @@ struct Tween {
 ```
 
 Las funciones de easing más usadas:
+
 - `Linear(t) = t`
 - `EaseInQuad(t) = t*t`
 - `EaseOutQuad(t) = t*(2-t)`
@@ -1248,7 +1299,7 @@ es que los datos del juego son compartidos y modificados desde todas partes.
 
 El patrón más común en la industria es el **job system** (sistema de trabajos):
 
-```
+```txt
 Main Thread:   [Submit jobs] ──────────────────────── [Collect results]
 Worker 1:              [Job A] ──── [Job C]
 Worker 2:              [Job B] ──────────────── [Job D]
@@ -1264,13 +1315,13 @@ lectura). El scheduler los distribuye a los cores disponibles.
 
 El modelo más común en motores AAA:
 
-**Main/Game Thread:** ejecuta el game loop: input, lógica, física. Al final del
+Main/Game Thread: ejecuta el game loop: input, lógica, física. Al final del
 frame, serializa el estado del juego a un **Render Command Buffer**.
 
-**Render Thread:** lee el Render Command Buffer y envía los draw calls a la GPU.
+Render Thread: lee el Render Command Buffer y envía los draw calls a la GPU.
 Puede correr con un frame de lag respecto al Game Thread.
 
-```
+```txt
 Frame N:   [Game Thread: update] → [Render Buffer N] → [Render Thread: draw N]
 Frame N+1: [Game Thread: update] → [Render Buffer N+1]
                                                     ↓ (paralelo)
@@ -1286,15 +1337,15 @@ preparar el siguiente frame.
 
 Los locks (mutex) son lentos y pueden causar deadlocks. Las alternativas:
 
-**Double buffering de estado:** el game thread escribe en el buffer A mientras
+Double buffering de estado: el game thread escribe en el buffer A mientras
 el render thread lee del buffer B. Al final del frame se hace swap. Sin locks,
 sin contención.
 
-**Lock-free queues (SPSC - Single Producer Single Consumer):** una cola con
+Lock-free queues (SPSC - Single Producer Single Consumer): una cola con
 un productor y un consumidor puede implementarse sin locks usando operaciones
 atómicas. Ideal para comunicación entre Game Thread y Render Thread.
 
-**Immutable commands:** el Render Command Buffer es write-once (solo el game
+Immutable commands: el Render Command Buffer es write-once (solo el game
 thread escribe) y read-once (solo el render thread lee). No hay contención.
 
 ---
@@ -1319,7 +1370,8 @@ EventSystem::Subscribe("PlayerDied", [](const Event& e) {
 Esto se llama también **Observer pattern** o **Signal-Slot system** (terminología
 de Qt y Godot).
 
-**Tipos de dispatch:**
+#### Tipos de dispatch
+
 - **Immediate:** el evento se procesa instantáneamente cuando se emite. Puede
   causar reentrada si el handler emite otro evento.
 - **Queued:** los eventos se encolan y se procesan al inicio del siguiente frame.
@@ -1351,7 +1403,7 @@ lua_register(L, "GetDeltaTime", [](lua_State* L) -> int {
 });
 ```
 
-**Alternativas:** Python (pesado), AngelScript (tipado, sintaxis C-like),
+Alternativas: Python (pesado), AngelScript (tipado, sintaxis C-like),
 Wren (compacto), C# (Unity usa Mono/IL2CPP).
 
 ---
@@ -1360,7 +1412,7 @@ Wren (compacto), C# (Unity usa Mono/IL2CPP).
 
 Las escenas deben poder guardarse en disco (editor) y cargarse en runtime:
 
-**JSON/YAML:** legible por humanos, fácil de depurar. Lento de parsear para
+JSON/YAML: legible por humanos, fácil de depurar. Lento de parsear para
 escenas grandes.
 
 ```json
@@ -1380,7 +1432,7 @@ escenas grandes.
 }
 ```
 
-**Binary formats (FlatBuffers, protobuf):** más compactos y rápidos. Usados en
+Binary formats (FlatBuffers, protobuf): más compactos y rápidos. Usados en
 producción. No legibles por humanos sin herramientas.
 
 El sistema de componentes debe soportar **reflection** (saber sus propias
@@ -1392,6 +1444,7 @@ específico por cada tipo de componente.
 ## 13. Referencia: arquitecturas de motores reales
 
 ### Unity (2D/3D, C#)
+
 - Scene Graph con GameObjects y Components (MonoBehaviour).
 - Rendering: SRP (Scriptable Render Pipeline). El juego elige URP (ligero) o HDRP (avanzado).
 - Física: PhysX (3D), Box2D (2D).
@@ -1401,6 +1454,7 @@ específico por cada tipo de componente.
 - ECS disponible como paquete separado (DOTS).
 
 ### Godot 4 (2D/3D, GDScript/C#/C++)
+
 - Scene Graph con Nodes (todo es un Node). Cada escena es un árbol.
 - Rendering: Vulkan como backend principal, OpenGL como fallback.
 - Física: Godot Physics (propio, 2D y 3D) o Jolt (opcional en 4.x).
@@ -1409,6 +1463,7 @@ específico por cada tipo de componente.
 - Sin separación engine/game: el motor ES el editor.
 
 ### Unreal Engine (3D, C++)
+
 - Actor/Component system (similar a Scene Graph pero con actores como ciudadanos de primera clase).
 - Rendering: Deferred rendering, Lumen (GI dinámica), Nanite (geometría virtual).
 - Física: PhysX → Chaos (motor propio desde UE5).
@@ -1417,6 +1472,7 @@ específico por cada tipo de componente.
 - Multijugador: sistema de replicación de red integrado en el engine.
 
 ### pygame / SDL (2D, Python/C)
+
 - Sin sistema de entidades. El desarrollador construye el suyo.
 - Rendering: SDL_Renderer o OpenGL directo.
 - Sin física integrada (usar pymunk/Box2D por separado).

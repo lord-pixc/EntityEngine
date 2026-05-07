@@ -19,19 +19,22 @@
 Una base sólida y limpia de bajo nivel. Los cimientos del motor están bien
 estructurados aunque incompletos:
 
-| Sistema | Estado | ¿Usable? |
-|---|---|---|
-| Bucle principal (`Application`) | ✅ Funcional | Sí, pero sin punto de extensión |
-| Ventana SDL + VSync | ✅ Funcional | Sí |
-| Delta time, FPS, tiempo total (`Time`) | ✅ Funcional | Sí |
-| Logging con niveles (`Log` + macros) | ✅ Funcional | Sí |
-| Estado de teclado y ratón (`Input`) | ⚠️ Parcial | Solo "está pulsado", no "se acaba de pulsar" |
-| Interfaz de renderizado (`IRenderer2D`) | ⚠️ Esqueleto | Definida pero sin métodos de dibujo |
-| Backend SDL de renderizado (`SDLRenderer2D`) | ⚠️ Desconectado | Implementado pero no usado en el bucle |
+| Sistema                                      | Estado          | ¿Usable?                                                  |
+| -------------------------------------------- | --------------- | --------------------------------------------------------- |
+| Bucle principal (`Application`)              | ✅ Funcional    | Sí, pero sin punto de extensión                           |
+| Ventana SDL + VSync                          | ✅ Funcional    | Sí                                                        |
+| Delta time, FPS, tiempo total (`Time`)       | ✅ Funcional    | Sí                                                        |
+| Logging con niveles (`Log` + macros)         | ✅ Funcional    | Sí                                                        |
+| Códigos propios de input (`InputCodes`)      | ✅ Funcional    | Sí                                                        |
+| Estado de teclado y ratón (`Input`)          | ✅ Funcional    | Sí, con `Held`/`JustPressed`/`JustReleased`               |
+| Actions y mappings (`InputMap`)              | ⚠️ Inicial      | Acciones binarias teclado/mouse, sin ejes ni persistencia |
+| Interfaz de renderizado (`IRenderer2D`)      | ⚠️ Esqueleto    | Definida pero sin métodos de dibujo                       |
+| Backend SDL de renderizado (`SDLRenderer2D`) | ⚠️ Desconectado | Implementado pero no usado en el bucle                    |
 
-**Fortalezas del diseño actual:**
-- SDL3 no aparece en ningún header público (forward declarations). La API del
-  motor es limpia para el consumidor.
+#### Fortalezas del diseño actual
+
+- SDL3 ya no aparece en `Input.h`: el código de juego usa `KeyCode`,
+  `MouseButton` e `InputMap`.
 - La separación `engine/` vs `game/` es correcta desde el inicio.
 - `IRenderer2D` es el punto de extensión correcto para backends futuros.
 
@@ -45,15 +48,17 @@ estructurados aunque incompletos:
    y vacío. Sin esto, el código del juego (`game/main.cpp`) no puede hacer nada.
    Solución: clase `Game` virtual o callback registrable.
 
-2. **`IsKeyJustPressed` / `IsKeyJustReleased`.** Sin estado del frame anterior
-   es imposible escribir lógica de juego real (saltar, disparar, interactuar).
+2. **Pulir `InputMap`.** Ya existe una primera versión con múltiples bindings,
+   pero faltan helpers cómodos, prevención de duplicados, ejes, contextos y
+   persistencia.
 
 3. **Conectar `IRenderer2D` al bucle.** `Window::OnUpdate()` hace el render
    directamente. `SDLRenderer2D` existe pero no se usa.
 
 ### 2.2 Sistemas que faltan completamente
 
-**Renderizado:**
+#### Renderizado
+
 - Carga y dibujo de texturas/sprites
 - Cámara 2D (pan, zoom, follow, screen shake)
 - Dibujo de formas geométricas (rect, línea, círculo)
@@ -61,27 +66,32 @@ estructurados aunque incompletos:
 - Sprite batching
 - Z-ordering y capas de render
 
-**Lógica del juego:**
+#### Lógica del juego
+
 - Sistema de entidades (Scene Graph o ECS)
 - Transform 2D con jerarquía padre-hijo
 - Sistema de componentes
 - Scene / SceneManager
 
-**Recursos:**
+#### Recursos
+
 - Resource Manager (caché de activos)
 - Carga de texturas (PNG, BMP, etc.)
 - Carga de audio
 
-**Físicas:**
+#### Físicas
+
 - Colisión AABB / Círculo
 - Resolución de colisiones
 - Triggers
 
-**Audio:**
+#### Audio
+
 - Reproducción de sonido (efectos)
 - Música de fondo
 
-**Tiempo:**
+#### Tiempo
+
 - Fixed timestep con acumulador
 - Cap de deltaTime
 - TimeScale
@@ -95,11 +105,13 @@ Cada fase produce algo jugable o demostrable al terminar.
 ---
 
 ### FASE 0 — Correcciones base
-**Objetivo:** el motor acepta código de juego y tiene input completo.
 
-**0.1 — Punto de extensión para el juego**
+Objetivo: el motor acepta código de juego y tiene input completo.
+
+#### 0.1 — Punto de extensión para el juego
 
 Crear `engine/include/Core/Game.h`:
+
 ```cpp
 namespace EntityEngine {
     class Game {
@@ -119,41 +131,65 @@ métodos en el momento correcto del bucle. El `game/main.cpp` crea una subclase:
 class MyGame : public EntityEngine::Game {
     void OnStart() override { EE_LOG_INFO("Juego iniciado"); }
     void OnUpdate(float dt) override {
-        if (EntityEngine::Input::IsKeyJustPressed(SDL_SCANCODE_ESCAPE))
+        if (EntityEngine::Input::IsKeyJustPressed(EntityEngine::KeyCode::Escape))
             // salir...
     }
 };
 ```
 
-**0.2 — Completar `Input` con estado de frame anterior**
+#### 0.2 — Completar `Input` con estado de frame anterior ✅
 
-En `Input.cpp` añadir `s_PrevKeys[]` y `s_PrevMouseButtons[]`.
-Al final de cada frame (nuevo método `Input::EndFrame()`) copiar current a prev.
-Añadir:
+Implementado con `s_PrevKeys[]`, `s_PrevMouseButtons[]` e `Input::EndFrame()`.
+La API pública usa `KeyCode` y `MouseButton` propios del motor:
+
 ```cpp
-static bool IsKeyJustPressed(SDL_Scancode key);
-static bool IsKeyJustReleased(SDL_Scancode key);
-static bool IsMouseButtonJustPressed(uint8_t button);
-static bool IsMouseButtonJustReleased(uint8_t button);
+static bool IsKeyHeld(KeyCode key);
+static bool IsKeyJustPressed(KeyCode key);
+static bool IsKeyJustReleased(KeyCode key);
+static bool IsMouseButtonHeld(MouseButton button);
+static bool IsMouseButtonJustPressed(MouseButton button);
+static bool IsMouseButtonJustReleased(MouseButton button);
 ```
 
-**0.3 — Conectar `IRenderer2D` al bucle**
+#### 0.2.1 — `InputCodes` e `InputMap` inicial ⚠️
+
+Implementado parcialmente:
+
+- `InputCodes.h` define `KeyCode` y `MouseButton` sin exponer SDL.
+- `InputMap` permite acciones nombradas por el juego con múltiples bindings:
+  `std::unordered_map<std::string, std::vector<InputBinding>>`.
+- Soporta bindings de teclado y mouse mediante `std::variant`.
+- Soporta `IsActionHeld`, `IsActionJustPressed` e `IsActionJustReleased`.
+
+Deuda pendiente:
+
+- Helpers cómodos para construir/reemplazar bindings sin crear `InputBinding`
+  manualmente.
+- Evitar bindings duplicados.
+- Ejes digitales (`MoveX`, `MoveY`).
+- Contextos de input (`Gameplay`, `Menu`, `Inventory`).
+- Guardar/cargar mappings desde archivo.
+- Ejemplo real en `game/main.cpp` cuando exista punto de extensión del juego.
+
+#### 0.3 — Conectar `IRenderer2D` al bucle
 
 `Application` crea `std::unique_ptr<IRenderer2D>` con el `SDL_Renderer` de
 `Window`. El flujo de `Window::OnUpdate()` se parte:
+
 - `BeginFrame()` llama al `clear`.
 - `EndFrame()` llama al `present`.
 - `Window` solo expone `GetRenderer()` y no hace render directamente.
 
-**0.4 — Cap de deltaTime en `Time`**
+#### 0.4 — Cap de deltaTime en `Time`
 
 En `Time::Update()`, limitar el deltaTime máximo a ~50ms (20 FPS equivalente)
 para evitar spikes que rompan la física futura:
+
 ```cpp
 s_DeltaTime = std::min(frameTime.count(), 0.05f);
 ```
 
-**0.5 — Corregir el include en `game/main.cpp`**
+#### 0.5 — Corregir el include en `game/main.cpp`
 
 Cambiar `#include "../../engine/include/Core/Application.h"` por
 `#include "Core/Application.h"` (ya funciona porque `engine/include` está en
@@ -162,23 +198,29 @@ Cambiar `#include "../../engine/include/Core/Application.h"` por
 ---
 
 ### FASE 1 — Texturas y sprites
-**Objetivo:** poder cargar una imagen y dibujarla en pantalla.
 
-**1.1 — `Texture`**
+Objetivo: poder cargar una imagen y dibujarla en pantalla.
+
+#### 1.1 — `Texture`
+
 Wrappea `SDL_Texture*`. Almacena `int width`, `int height`.
 Constructor privado; solo el `ResourceManager` puede crearla.
 
-**1.2 — `ResourceManager`**
+#### 1.2 — `ResourceManager`
+
 Singleton o accedido por referencia. Interfaz clave:
+
 ```cpp
 std::shared_ptr<Texture> Load(const std::string& path);
 void Unload(const std::string& path);
 ```
+
 Internamente: `unordered_map<string, weak_ptr<Texture>>`.
 Si la `weak_ptr` está expirada, recarga. Si está viva, devuelve sin recargar.
 Usa SDL_image (`SDL_LoadTexture`) para PNG, JPG, BMP.
 
-**1.3 — Ampliar `IRenderer2D`**
+#### 1.3 — Ampliar `IRenderer2D`
+
 ```cpp
 virtual void DrawSprite(const Texture& tex,
                         const Rect& src,  // región de la textura
@@ -189,7 +231,8 @@ virtual void DrawRect(const Rect& rect, Color color, bool filled = false) = 0;
 virtual void DrawLine(int x0, int y0, int x1, int y1, Color color) = 0;
 ```
 
-**1.4 — `SDLRenderer2D` implementa los nuevos métodos**
+#### 1.4 — `SDLRenderer2D` implementa los nuevos métodos
+
 - `DrawSprite` → `SDL_RenderTextureRotated`
 - `DrawRect` → `SDL_RenderFillRect` / `SDL_RenderRect`
 - `DrawLine` → `SDL_RenderLine`
@@ -197,9 +240,11 @@ virtual void DrawLine(int x0, int y0, int x1, int y1, Color color) = 0;
 ---
 
 ### FASE 2 — Cámara 2D
-**Objetivo:** el mundo puede ser más grande que la pantalla.
 
-**2.1 — `Camera2D`**
+Objetivo: el mundo puede ser más grande que la pantalla.
+
+#### 2.1 — `Camera2D`
+
 ```cpp
 struct Camera2D {
     glm::vec2 position;   // punto del mundo centrado en pantalla
@@ -208,7 +253,8 @@ struct Camera2D {
 };
 ```
 
-**2.2 — `IRenderer2D` acepta transformación de cámara**
+#### 2.2 — `IRenderer2D` acepta transformación de cámara
+
 ```cpp
 virtual void SetCamera(const Camera2D& cam) = 0;
 virtual Camera2D GetCamera() const = 0;
@@ -218,18 +264,22 @@ virtual void BeginScreenSpace() = 0;
 virtual void EndScreenSpace() = 0;
 ```
 
-**2.3 — Transformación mundo → pantalla en `SDLRenderer2D`**
+#### 2.3 — Transformación mundo → pantalla en `SDLRenderer2D`
+
 En SDL3: `SDL_SetRenderScale(renderer, zoom, zoom)` + offset por posición de cámara.
 
-**2.4 — `ScreenToWorld` y `WorldToScreen` helpers**
+#### 2.4 — `ScreenToWorld` y `WorldToScreen` helpers
+
 Necesarios para mouse picking (saber sobre qué entidad del mundo hizo click el usuario).
 
 ---
 
 ### FASE 3 — Sistema de entidades (Scene Graph)
-**Objetivo:** estructurar el juego en entidades con componentes y jerarquía.
 
-**3.1 — `Transform2D`**
+Objetivo: estructurar el juego en entidades con componentes y jerarquía.
+
+#### 3.1 — `Transform2D`
+
 ```cpp
 struct Transform2D {
     glm::vec2 position = {0, 0};
@@ -241,7 +291,8 @@ struct Transform2D {
 };
 ```
 
-**3.2 — `Component` (base)**
+#### 3.2 — `Component` (base)
+
 ```cpp
 class Component {
 public:
@@ -253,7 +304,8 @@ public:
 };
 ```
 
-**3.3 — `Entity` (nodo del scene graph)**
+#### 3.3 — `Entity` (nodo del scene graph)
+
 ```cpp
 class Entity {
 public:
@@ -281,7 +333,8 @@ private:
 };
 ```
 
-**3.4 — `Scene`**
+#### 3.4 — `Scene`
+
 ```cpp
 class Scene {
 public:
@@ -296,7 +349,8 @@ private:
 };
 ```
 
-**3.5 — `SceneManager`**
+#### 3.5 — `SceneManager`
+
 ```cpp
 class SceneManager {
 public:
@@ -309,7 +363,8 @@ public:
 };
 ```
 
-**3.6 — Componentes iniciales**
+#### 3.6 — Componentes iniciales
+
 - `SpriteComponent`: textura + rect fuente + color tint.
 - `CameraComponent`: define la cámara activa de la escena.
 - `ScriptComponent`: permite adjuntar lógica via subclase o lambda.
@@ -317,9 +372,11 @@ public:
 ---
 
 ### FASE 4 — Fixed timestep
-**Objetivo:** comportamiento determinista para física.
+
+Objetivo: comportamiento determinista para física.
 
 Modificar `Application::Run()`:
+
 ```cpp
 const float FIXED_DT = 1.0f / 120.0f;
 float accumulator = 0.0f;
@@ -347,9 +404,11 @@ Añadir `OnFixedUpdate(float fixedDt)` a la clase `Game` base.
 ---
 
 ### FASE 5 — Animación de sprites
-**Objetivo:** sprites animados con máquina de estados básica.
 
-**5.1 — `Animation`**
+Objetivo: sprites animados con máquina de estados básica.
+
+#### 5.1 — `Animation`
+
 ```cpp
 struct Animation {
     std::string name;
@@ -359,53 +418,65 @@ struct Animation {
 };
 ```
 
-**5.2 — `AnimatorComponent`**
+#### 5.2 — `AnimatorComponent`
+
 Hereda de `Component`. Actualiza el frame según el tiempo en `OnUpdate(dt)`.
 Expone `SetAnimation(name)` para cambiar el estado activo.
 
-**5.3 — `SpriteSheet`**
+#### 5.3 — `SpriteSheet`
+
 Helper para generar automáticamente las rects de un sprite sheet en cuadrícula
 dado el tamaño de frame y el número de columnas/filas.
 
 ---
 
 ### FASE 6 — Colisiones 2D
-**Objetivo:** detectar y responder colisiones entre entidades.
 
-**6.1 — Formas de colisión**
+Objetivo: detectar y responder colisiones entre entidades.
+
+#### 6.1 — Formas de colisión
+
 ```cpp
 struct AABB { glm::vec2 min, max; };
 struct Circle { glm::vec2 center; float radius; };
 ```
 
-**6.2 — `ColliderComponent`**
+#### 6.2 — `ColliderComponent`
+
 Wrappea la forma. Puede ser trigger (detecta sin resolver).
 
-**6.3 — `PhysicsWorld`**
+#### 6.3 — `PhysicsWorld`
+
 Actualizado en `OnFixedUpdate`. Pasos:
+
 1. Recoger todos los `ColliderComponent` activos.
 2. Broad phase: spatial hash grid.
 3. Narrow phase: AABB vs AABB, Círculo vs Círculo, AABB vs Círculo.
 4. Resolución: MTV para colisiones sólidas.
 5. Callbacks: `Component::OnCollisionEnter(Entity* other)`.
 
-**6.4 — `RigidbodyComponent`**
+#### 6.4 — `RigidbodyComponent`
+
 Velocidad, masa, gravedad. Actualizado en `FixedUpdate`.
 
 ---
 
 ### FASE 7 — Audio
-**Objetivo:** reproducir efectos de sonido y música.
+
+Objetivo: reproducir efectos de sonido y música.
 
 Usar **miniaudio** (header-only, sin dependencias adicionales).
 
-**7.1 — `AudioSystem`**
+#### 7.1 — `AudioSystem`
+
 Inicializado en `Application`. Gestiona el audio device.
 
-**7.2 — `AudioClip`**
+#### 7.2 — `AudioClip`
+
 Buffer PCM decodificado. Cargado por `ResourceManager`.
 
-**7.3 — API de alto nivel**
+#### 7.3 — API de alto nivel
+
 ```cpp
 AudioSystem::PlaySound(clip, volume, pitch);
 AudioSystem::PlayMusic(clip, loop, volume);
@@ -416,14 +487,17 @@ AudioSystem::StopAll();
 ---
 
 ### FASE 8 — Texto y fuentes
-**Objetivo:** renderizar texto en pantalla.
+
+Objetivo: renderizar texto en pantalla.
 
 Usar **stb_truetype** (header-only) para generar atlas de fuente.
 
-**8.1 — `Font`**
+#### 8.1 — `Font`
+
 Genera un atlas de textura con todos los glifos de una fuente TTF a un tamaño.
 
-**8.2 — `IRenderer2D::DrawText`**
+#### 8.2 — `IRenderer2D::DrawText`
+
 ```cpp
 virtual void DrawText(const Font& font, const std::string& text,
                       glm::vec2 position, Color color, float scale = 1.0f) = 0;
@@ -463,9 +537,9 @@ class IRenderer2D {
 };
 ```
 
-El `SDLRenderer` guarda internamente `unordered_map<uint32_t, SDL_Texture*>`.  
-El `OpenGLRenderer` guarda `unordered_map<uint32_t, GLuint>`.  
-El `VulkanRenderer` guarda `unordered_map<uint32_t, VkImage>`.  
+El `SDLRenderer` guarda internamente `unordered_map<uint32_t, SDL_Texture*>`.
+El `OpenGLRenderer` guarda `unordered_map<uint32_t, GLuint>`.
+El `VulkanRenderer` guarda `unordered_map<uint32_t, VkImage>`.
 El código del juego nunca sabe qué hay dentro.
 
 ---
@@ -476,10 +550,10 @@ Actualmente `Window` crea el `SDL_Renderer` internamente. En OpenGL la ventana
 crea el contexto GL. En Vulkan la ventana solo provee una `VkSurfaceKHR` y el
 Vulkan renderer crea su propia swapchain.
 
-**No es necesario refactorizar esto ahora.** Pero cuando se implemente el segundo
+No es necesario refactorizar esto ahora. Pero cuando se implemente el segundo
 backend (OpenGL), la refactorización será:
 
-```
+```md
 Window → solo gestiona la ventana del SO y expone:
     - GetNativeWindowHandle() → void* (SDL_Window*, HWND, etc.)
     - GetDrawableSize() → ivec2
@@ -499,7 +573,7 @@ IRenderer2D → se construye sobre RenderContext
 Completar el motor 2D completamente antes de introducir un segundo backend.
 Cambiar el backend sin tener el motor funcional genera complejidad prematura.
 
-**Orden sugerido:**
+#### Orden sugerido
 
 1. Motor 2D completo con SDL (Fases 0–8).
 2. Refactorizar `Window` para separar contexto de render.
@@ -514,17 +588,17 @@ Cambiar el backend sin tener el motor funcional genera complejidad prematura.
 
 ### 4.5 Dependencias externas recomendadas
 
-| Necesidad | Librería | Por qué |
-|---|---|---|
-| Math (vec2, mat3, mat4) | **glm** | Estándar de facto, header-only, OpenGL-compatible |
-| Carga de imágenes | **SDL_image** (corto plazo) / **stb_image** (largo plazo) | stb_image es header-only y no depende de SDL |
-| Texto / fuentes | **stb_truetype** | Header-only, funciona con cualquier backend |
-| Audio | **miniaudio** | Header-only, sin deps, multiplataforma |
-| Física 2D | **Box2D 2.x** | Maduro, bien documentado, abstratable |
-| Serialización JSON | **nlohmann/json** | Header-only, muy usado en C++ moderno |
-| ECS (futuro) | **EnTT** | Header-only, archetype-based, excelente rendimiento |
+| Necesidad               | Librería                                                  | Por qué                                             |
+| ----------------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| Math (vec2, mat3, mat4) | **glm**                                                   | Estándar de facto, header-only, OpenGL-compatible   |
+| Carga de imágenes       | **SDL_image** (corto plazo) / **stb_image** (largo plazo) | stb_image es header-only y no depende de SDL        |
+| Texto / fuentes         | **stb_truetype**                                          | Header-only, funciona con cualquier backend         |
+| Audio                   | **miniaudio**                                             | Header-only, sin deps, multiplataforma              |
+| Física 2D               | **Box2D 2.x**                                             | Maduro, bien documentado, abstratable               |
+| Serialización JSON      | **nlohmann/json**                                         | Header-only, muy usado en C++ moderno               |
+| ECS (futuro)            | **EnTT**                                                  | Header-only, archetype-based, excelente rendimiento |
 
-**Principio:** preferir librerías header-only para dependencias menores (stb,
+Principio: preferir librerías header-only para dependencias menores (stb,
 miniaudio, glm, nlohmann). Para dependencias mayores (SDL3, Box2D, EnTT) usar
 como submódulos de git o paquetes de sistema.
 
@@ -549,16 +623,16 @@ de diseño que dificulten el editor más adelante.
 
 ### 4.7 Resumen de decisiones tomadas y por tomar
 
-| Decisión | Estado | Opción elegida |
-|---|---|---|
-| API gráfica primaria | ✅ Decidido | SDL3 (2D), OpenGL después |
-| Lenguaje | ✅ Decidido | C++23 |
-| Build system | ✅ Decidido | CMake |
-| Tipo de entidades | ⏳ Pendiente Fase 3 | Scene Graph recomendado |
-| Física 2D | ⏳ Pendiente Fase 6 | Box2D 2.x recomendado |
-| Audio | ⏳ Pendiente Fase 7 | miniaudio recomendado |
-| Formato de escena | ⏳ Pendiente Fase 3 | JSON (nlohmann) recomendado |
-| Scripting | ⏳ Futuro lejano | Lua o GDScript-like |
+| Decisión             | Estado              | Opción elegida              |
+| -------------------- | ------------------- | --------------------------- |
+| API gráfica primaria | ✅ Decidido         | SDL3 (2D), OpenGL después   |
+| Lenguaje             | ✅ Decidido         | C++23                       |
+| Build system         | ✅ Decidido         | CMake                       |
+| Tipo de entidades    | ⏳ Pendiente Fase 3 | Scene Graph recomendado     |
+| Física 2D            | ⏳ Pendiente Fase 6 | Box2D 2.x recomendado       |
+| Audio                | ⏳ Pendiente Fase 7 | miniaudio recomendado       |
+| Formato de escena    | ⏳ Pendiente Fase 3 | JSON (nlohmann) recomendado |
+| Scripting            | ⏳ Futuro lejano    | Lua o GDScript-like         |
 
 ---
 

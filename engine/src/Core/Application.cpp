@@ -69,7 +69,7 @@ namespace EntityEngine
             while (SDL_PollEvent(&event))
             {
                 // Propaga los eventos a los sistemas de entrada.
-                Input::OnEvent(event);
+                Input::OnEvent(&event);
 
                 if (event.type == SDL_EVENT_QUIT)
                 {

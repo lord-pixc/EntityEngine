@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <array>
-#include <SDL3/SDL_scancode.h>
-#include <SDL3/SDL_events.h>
+#include <cstddef>
+
+#include "InputCodes.h"
 
 namespace EntityEngine
 {
@@ -11,36 +11,37 @@ namespace EntityEngine
     /**
      * @brief Sistema estático para consultar el estado de teclado y ratón.
      *
-     * Debe alimentarse con los eventos SDL recibidos en el loop principal
-     * mediante OnEvent. Posteriormente puede consultarse en cualquier parte
-     * del código para saber qué teclas o botones están presionados y la
-     * posición actual del cursor.
+     * La API pública usa tipos propios del motor para no filtrar SDL al código
+     * de juego. Application alimenta este sistema desde el backend activo.
      */
     class Input
     {
     public:
-        // Llamado por Application para alimentar el sistema de input
-        static void OnEvent(const SDL_Event &event);
-
-        static void EndFrame();
-
         // Teclado
-        static bool IsKeyHeld(SDL_Scancode key);
-        static bool IsKeyJustPressed(SDL_Scancode key);
-        static bool IsKeyJustReleased(SDL_Scancode key);
+        static bool IsKeyHeld(KeyCode key);
+        static bool IsKeyJustPressed(KeyCode key);
+        static bool IsKeyJustReleased(KeyCode key);
 
         // Mouse
-        static bool IsMouseButtonHeld(std::uint8_t button);
-        static bool IsMouseButtonJustPressed(std::uint8_t button);
-        static bool IsMouseButtonJustReleased(std::uint8_t button);
+        static bool IsMouseButtonHeld(MouseButton button);
+        static bool IsMouseButtonJustPressed(MouseButton button);
+        static bool IsMouseButtonJustReleased(MouseButton button);
         static int GetMouseX();
         static int GetMouseY();
 
     private:
-        static std::array<bool, SDL_SCANCODE_COUNT> s_CurrentKeys;
-        static std::array<bool, SDL_SCANCODE_COUNT> s_PrevKeys;
-        static std::array<bool, 6> s_MouseButtons; // izquierda, medio, derecha, etc.
-        static std::array<bool, 6> s_PrevMouseButtons;
+        friend class Application;
+
+        static constexpr std::size_t KeyCount = static_cast<std::size_t>(KeyCode::Count);
+        static constexpr std::size_t MouseButtonCount = 6; // SDL reserva el índice 0 y usa 1..5.
+
+        static void OnEvent(const void *event);
+        static void EndFrame();
+
+        static std::array<bool, KeyCount> s_CurrentKeys;
+        static std::array<bool, KeyCount> s_PrevKeys;
+        static std::array<bool, MouseButtonCount> s_MouseButtons;
+        static std::array<bool, MouseButtonCount> s_PrevMouseButtons;
         static int s_MouseX;
         static int s_MouseY;
     };

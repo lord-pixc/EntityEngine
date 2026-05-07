@@ -5,10 +5,11 @@ para gestionar la ventana y la entrada. Incluye utilidades básicas de tiempo y
 logging para facilitar el desarrollo de pequeños juegos o demos técnicas.
 
 ## Características
+
 - **Bucle principal listo para usar** mediante `EntityEngine::Application`,
   responsable de inicializar SDL, crear la ventana y despachar eventos.
-- **Gestión de entrada** con la clase estática `Input`, que expone el estado de
-  teclado y ratón.
+- **Gestión de entrada** con `InputCodes`, `Input` e `InputMap`: códigos propios
+  del motor, estado de teclado/ratón y actions configurables.
 - **Utilidades de tiempo** (`Time`) para medir delta time, FPS y tiempo total
   desde el arranque de la aplicación.
 - **Sistema de logging** sencillo con niveles de severidad configurables.
@@ -16,6 +17,7 @@ logging para facilitar el desarrollo de pequeños juegos o demos técnicas.
   implementación de referencia basada en SDL.
 
 ## Estructura del proyecto
+
 - `engine/` contiene el motor como biblioteca:
   - `include/` headers públicos organizados por módulo (`Core`, `Render`,
     `Platform`).
@@ -26,17 +28,22 @@ logging para facilitar el desarrollo de pequeños juegos o demos técnicas.
   biblioteca y el juego.
 
 ## Requisitos previos
+
 - Compilador C++17 o superior.
 - [CMake 3.16+](https://cmake.org/) para la configuración del proyecto.
 - Cabeceras y librerías de desarrollo de [SDL3](https://github.com/libsdl-org/SDL)
   disponibles en el sistema.
 
 ## Cómo compilar
+
 1. Crear el directorio de compilación:
+
    ```bash
    cmake -S . -B build
    ```
+
 2. Generar los binarios:
+
    ```bash
    cmake --build build
    ```
@@ -44,27 +51,39 @@ logging para facilitar el desarrollo de pequeños juegos o demos técnicas.
 Esto produce la biblioteca del motor y el ejecutable de ejemplo en `build/`.
 
 ## Cómo ejecutar
+
 Después de compilar, ejecuta el ejemplo desde la raíz del proyecto:
+
 ```bash
 ./build/game/Game
 ```
+
 Si SDL no encuentra los backends de vídeo del sistema, revisa la instalación de
 las dependencias (drivers, paquetes de desarrollo o variables de entorno como
 `SDL_VIDEODRIVER`).
 
 ## Uso rápido del motor
+
 - Incluye `engine/include/Core/Application.h` y crea una instancia de
   `EntityEngine::Application` con el título y dimensiones deseadas.
 - Llama a `Run()` para entrar en el bucle principal.
-- Consulta `Input::IsKeyPressed` o `Input::IsMouseButtonPressed` para reaccionar
-  a la entrada del usuario, y `Input::GetMouseX`/`GetMouseY` para la posición
-  del cursor.
+- Consulta `Input::IsKeyHeld`, `Input::IsKeyJustPressed` o
+  `Input::IsKeyJustReleased` con `KeyCode`. Para ratón usa `MouseButton` con
+  `Input::IsMouseButtonHeld` y sus variantes `JustPressed`/`JustReleased`.
+- Usa `InputMap` para crear acciones configurables:
+
+  ```cpp
+  inputMap.Bind("Jump", EntityEngine::KeyCode::Space);
+  inputMap.Bind("Attack", EntityEngine::MouseButton::Left);
+  ```
+
 - Utiliza `Time::GetDeltaTime()` para que tu lógica sea independiente de la
   velocidad de fotogramas y `Time::GetFPS()` para mostrar diagnósticos.
 - Ajusta el nivel mínimo de logs con `Log::SetLevel` y emite mensajes usando las
   macros `EE_LOG_*`.
 
 ## Extensión y personalización
+
 - La interfaz `IRenderer2D` permite añadir nuevos backends (por ejemplo, OpenGL
   o Vulkan) implementando `BeginFrame`, `Clear` y `EndFrame`.
 - `Window` expone `GetNativeWindow()` y `GetRenderer()` para integrar otras
@@ -73,6 +92,7 @@ las dependencias (drivers, paquetes de desarrollo o variables de entorno como
   entidades y lógica específica del juego.
 
 ## Contribuir
+
 Las contribuciones son bienvenidas. Si encuentras problemas o tienes sugerencias
 para nuevas características, abre un issue o envía un pull request describiendo
 los cambios propuestos.

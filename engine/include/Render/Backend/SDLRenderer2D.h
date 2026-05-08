@@ -23,6 +23,10 @@ namespace EntityEngine
         void EndFrame() override;
         void Clear(const Color &color) override;
 
+        void DrawRect(const Rect &rect, const Color &color, bool filled = true) override;
+        void DrawLine(const Line &line, const Color &color) override;
+        void DrawCircle(const Circle &circle, const Color &color, bool filled = true) override;
+
     private:
         SDL_Renderer *m_Renderer; ///< Renderer proporcionado por SDL_Window.
     };

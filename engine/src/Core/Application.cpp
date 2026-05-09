@@ -99,11 +99,6 @@ namespace EntityEngine
             m_Renderer2D->BeginFrame();
             m_Renderer2D->Clear({20, 20, 25, 255});
 
-            m_Renderer2D->DrawRect({100, 100, 200, 120}, {255, 0, 0, 255}, false);
-            m_Renderer2D->DrawLine({50, 50, 400, 300}, {0, 255, 0, 255});
-            m_Renderer2D->DrawCircle({400, 250, 60}, {0, 128, 255, 255}, true);
-
-
             // Aquí después irán las llamadas de render del juego/escena.
 
             m_Renderer2D->EndFrame();

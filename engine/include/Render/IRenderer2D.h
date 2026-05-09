@@ -24,6 +24,8 @@ namespace EntityEngine
         float x1, y1, x2, y2;
     };
 
+    using TextureHandle = std::uint32_t;
+
     /**
      * @brief Interfaz genérica para renderizadores 2D.
      *
@@ -40,8 +42,12 @@ namespace EntityEngine
         virtual void EndFrame() = 0;
 
         virtual void Clear(const Color &color) = 0;
+
         virtual void DrawRect(const Rect &rect, const Color &color, bool filled = true) = 0;
         virtual void DrawLine(const Line &line, const Color &color) = 0;
         virtual void DrawCircle(const Circle &circle, const Color &color, bool filled = false) = 0;
+        virtual void DrawTexture(TextureHandle texture, const Rect *srcRect = nullptr, const Rect *destRect = nullptr, float rotation = 0.0f, const Color& tint = {255, 255, 255, 255}) = 0;
+        virtual TextureHandle CreateTexture(const void *data, int width, int height) = 0;
+        virtual void DestroyTexture(TextureHandle texture) = 0;
     };
 } // namespace EntityEngine

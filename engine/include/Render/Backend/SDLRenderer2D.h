@@ -18,17 +18,9 @@ namespace EntityEngine
     class SDLRenderer2D : public IRenderer2D
     {
     public:
-        struct texture2D
-        {
-            SDL_Texture* texture;
-            int width;
-            int height;
-
-            int refcount;
-        };
-
         /// Crea el wrapper a partir de un renderer ya inicializado.
         SDLRenderer2D(SDL_Renderer *renderer);
+        ~SDLRenderer2D() override;
 
         void BeginFrame() override;
         void EndFrame() override;
@@ -37,7 +29,7 @@ namespace EntityEngine
         void DrawRect(const Rect &rect, const Color &color, bool filled = true) override;
         void DrawLine(const Line &line, const Color &color) override;
         void DrawCircle(const Circle &circle, const Color &color, bool filled = true) override;
-        void DrawTexture(TextureHandle texture, const Rect *srcRect = nullptr, const Rect *destRect = nullptr, float rotation = 0.0f, const Color& tint = {255, 255, 255, 255}) override;
+        void DrawSprite(TextureHandle texture, const Rect *srcRect = nullptr, const Rect *destRect = nullptr, float rotation = 0.0f, const Color& tint = {255, 255, 255, 255}) override;
         TextureHandle CreateTexture(const void *data, int width, int height) override;
         void DestroyTexture(TextureHandle texture) override;
 

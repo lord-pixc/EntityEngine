@@ -10,6 +10,16 @@ namespace EntityEngine
     SDLRenderer2D::SDLRenderer2D(SDL_Renderer *renderer)
         : m_Renderer(renderer) {}
 
+    SDLRenderer2D::~SDLRenderer2D()
+    {
+        for (auto &[handle, texture] : m_Textures)
+        {
+            SDL_DestroyTexture(texture);
+        }
+
+        m_Textures.clear();
+    }
+
     void SDLRenderer2D::BeginFrame()
     {
         // Por ahora nada especial
@@ -125,7 +135,7 @@ namespace EntityEngine
     void SDLRenderer2D::DestroyTexture(TextureHandle texture)
     {
         if (texture == 0)
-        return;
+            return;
 
         auto it = m_Textures.find(texture);
         if (it == m_Textures.end())
@@ -138,7 +148,7 @@ namespace EntityEngine
         m_Textures.erase(it);
     }
 
-    void SDLRenderer2D::DrawTexture(TextureHandle texture, const Rect *srcRect, const Rect *destRect, float rotation, const Color& tint)
+    void SDLRenderer2D::DrawSprite(TextureHandle texture, const Rect *srcRect, const Rect *destRect, float rotation, const Color& tint)
     {
 
         if (texture == 0)

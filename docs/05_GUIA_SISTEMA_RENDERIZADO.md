@@ -31,7 +31,7 @@ la imagen que el jugador ve en pantalla cada frame.
 A muy alto nivel, su trabajo es:
 
 ```txt
-Estado del mundo (posiciones, texturas, cámara)
+Estado del mundo (posición de entidades, texturas, cámara)
                        ↓
               Sistema de renderizado
                        ↓
@@ -44,23 +44,23 @@ Eso incluye tareas como:
 - Dibujar rectángulos, líneas y formas geométricas.
 - Cargar imágenes desde disco y dibujarlas como sprites.
 - Transformar coordenadas del mundo a coordenadas de pantalla (cámara).
-- Enviar la imagen terminada al monitor.
+- Enviar la imagen terminada al monitor (present/swap).
 
 El sistema de renderizado **no decide qué dibujar**. Eso lo decide el juego.
 El sistema solo provee las herramientas para hacerlo.
 
 ### Por qué no se dibuja directamente con SDL
 
-SDL3 tiene funciones que dibujan directamente sobre el renderer. En un proyecto
-pequeño está bien usarlas directo.
+SDL3 tiene funciones como `SDL_RenderFillRect` y `SDL_RenderTexture` que
+dibujan directamente. En un proyecto pequeño está bien usarlas directo.
 
 En un motor, el problema es que si el código del juego llama a funciones SDL
 directamente, el motor queda atado a SDL para siempre. Cambiar a OpenGL o
 Vulkan requeriría reescribir todo el código del juego.
 
-La solución es una **interfaz abstracta**: el juego llama a métodos del motor
-(`DrawSprite`, `DrawRect`). El motor decide internamente cómo traducir eso a
-SDL, OpenGL, Vulkan, etc.
+La solución es una **interfaz abstracta**: el juego solo llama a métodos del
+motor (`DrawSprite`, `DrawRect`). El motor decide internamente cómo traducir
+eso a SDL, OpenGL, Vulkan, etc.
 
 ---
 
@@ -78,7 +78,8 @@ El problema central es que `SDLRenderer2D` existe pero **no se usa**. El
 bucle principal en `Application` llama a `Window::OnUpdate()`, que hace el
 render directamente con SDL sin pasar por `IRenderer2D`.
 
-Toda la arquitectura de abstracción está preparada pero desconectada.
+Esto significa que toda la arquitectura de abstracción está preparada pero
+desconectada.
 
 ---
 
@@ -96,49 +97,52 @@ o de un panel solar. Solo sabe que enchufando en la interfaz estándar funciona.
 `IRenderer2D` es el enchufe del motor. El juego conecta ahí. El motor puede
 cambiar el backend (SDL, OpenGL, Vulkan) sin que el juego lo note.
 
-### En pseudocódigo
+### En código
 
-Sin abstracción, el juego hace cosas específicas de SDL:
+Sin abstracción, el juego hace esto:
 
-```txt
-llamar función de SDL con color rojo
-llamar función de SDL para dibujar rectángulo en posición X
+```cpp
+SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+SDL_RenderFillRect(renderer, &rect);
 ```
 
 Con abstracción, el juego hace esto:
 
-```txt
-renderer.DrawRect(posición, color)
+```cpp
+renderer.DrawRect({x, y, w, h}, {255, 0, 0, 255}, true);
 ```
 
-La implementación concreta de `DrawRect` existe en la clase que implementa
-`IRenderer2D`. Esa clase es la única que sabe cómo hablarle a SDL, OpenGL, etc.
+El método `DrawRect` existe en `IRenderer2D`. La implementación concreta
+(`SDLRenderer2D`, `OpenGLRenderer2D`, etc.) decide cómo ejecutarlo internamente.
 
 ### Diseño actual de IRenderer2D
 
-La interfaz hoy solo cubre el ciclo básico de frame:
+```cpp
+class IRenderer2D
+{
+public:
+    virtual ~IRenderer2D() = default;
 
-```txt
-IRenderer2D:
-  + BeginFrame()  — preparar el renderer
-  + EndFrame()    — presentar la imagen al monitor
-  + Clear(color)  — limpiar la pantalla con ese color
+    virtual void BeginFrame() = 0;
+    virtual void EndFrame()   = 0;
+    virtual void Clear(const Color& color) = 0;
+};
 ```
 
-Faltan todos los métodos de dibujo real: sprites, rectángulos, líneas.
-Eso se añade en las siguientes fases.
+Este es solo el esqueleto del ciclo de frame. Faltan todos los métodos de
+dibujo real: sprites, rectángulos, líneas, texto.
 
 ---
 
 ## 4. El ciclo de un frame de renderizado
 
-Cada frame, el sistema sigue esta secuencia fija:
+Cada frame, el sistema de renderizado sigue esta secuencia fija:
 
 ```txt
-1. BeginFrame    ← preparar el renderer para recibir órdenes de dibujo
-2. Clear(color)  ← limpiar la pantalla con el color de fondo
-3. DrawXxx(...)  ← todas las órdenes de dibujo del frame
-4. EndFrame      ← enviar la imagen terminada al monitor
+1. BeginFrame()    ← preparar el renderer para recibir draw calls
+2. Clear(color)    ← limpiar la pantalla con el color de fondo
+3. DrawXxx(...)    ← todas las llamadas de dibujo del juego
+4. EndFrame()      ← enviar la imagen terminada al monitor (SDL_RenderPresent)
 ```
 
 Esto es análogo a pintar un cuadro:
@@ -150,257 +154,392 @@ Esto es análogo a pintar un cuadro:
 
 ### Por qué `BeginFrame` y `EndFrame` son importantes
 
-En SDL3 el renderer es una máquina de estados. En OpenGL hay que abrir y
-cerrar contextos. En Vulkan hay command buffers y render passes con sus
-propios ciclos de apertura y cierre.
-
+En SDL3 el renderer es una máquina de estados. Algunas operaciones deben
+ocurrir antes de cualquier draw call y otras deben ocurrir después de todas.
 `BeginFrame` y `EndFrame` son los puntos de entrada y salida que garantizan
-que cada backend puede manejar su propia inicialización y finalización de frame
-sin que el código del juego sepa cómo funciona internamente.
+ese orden.
+
+En OpenGL/Vulkan la importancia es mayor: hay command buffers, render passes y
+sincronización explícita que deben abrirse y cerrarse correctamente.
 
 ---
 
 ## 5. Fase 0.3 — Conectar IRenderer2D al bucle
 
-Este es el primer paso real a implementar. Desbloquea todo lo demás.
+Este es el primer paso real a implementar. Es el más importante porque
+desbloquea todo lo demás.
 
 ### El problema actual
 
-`Window::OnUpdate()` mezcla dos responsabilidades:
+`Window::OnUpdate()` hace el clear y present directamente:
 
-```txt
-Window::OnUpdate():
-  limpiar la pantalla con color fijo
-  [aquí irían draw calls]
-  presentar el frame
+```cpp
+void Window::OnUpdate()
+{
+    SDL_SetRenderDrawColor(m_Renderer, 20, 20, 25, 255);
+    SDL_RenderClear(m_Renderer);
+    // sin draw calls reales
+    SDL_RenderPresent(m_Renderer);
+}
 ```
 
-`Application` llama eso cada frame. `SDLRenderer2D` nunca se invoca.
+`Application` llama `m_Window->OnUpdate()` cada frame. El `SDLRenderer2D`
+nunca se usa.
 
-### Lo que hay que resolver
+### Lo que hay que hacer
 
-**Pregunta guía**: ¿quién debe poseer el renderer y quién debe llamarlo?
+**Paso 1: `Application` crea y posee el renderer.**
 
-El renderer debe vivir en `Application`, no en `Window`. La ventana es
-responsable de existir como superficie de dibujo. El renderer es responsable
-de dibujar sobre esa superficie.
+En `Application.h`, añadir:
 
-El flujo correcto es:
+```cpp
+#include "Render/IRenderer2D.h"
+#include <memory>
 
-```txt
-Application posee:
-  - Window (la ventana del SO)
-  - IRenderer2D (el objeto que dibuja sobre esa ventana)
-
-Application::Run() cada frame:
-  - gestionar eventos
-  - llamar al juego (OnUpdate)
-  - pedir al renderer que limpie, reciba draw calls, y presente
+class Application
+{
+private:
+    std::unique_ptr<IRenderer2D> m_Renderer;
+    // ... resto de miembros existentes
+};
 ```
 
-**Qué debe dejar de hacer `Window`:**
+**Paso 2: `Application` inicializa el renderer con el SDL_Renderer de Window.**
 
-`Window::OnUpdate()` actualmente hace el clear y el present. Eso debe
-desaparecer de `Window` y pasar a ser responsabilidad del renderer.
+En `Application.cpp`, en el constructor, después de crear la ventana:
 
-`Window` debe quedarse solo con lo que es responsabilidad de una ventana:
-gestionar el handle nativo, el tamaño, el título.
+```cpp
+// Window ya tiene SDL_Renderer creado internamente
+// SDLRenderer2D no posee el renderer, solo lo usa
+m_Renderer = std::make_unique<SDLRenderer2D>(m_Window->GetRenderer());
+```
 
-**Cómo `Application` obtiene el renderer:**
+**Paso 3: `Window::OnUpdate()` se parte en dos responsabilidades.**
 
-`SDLRenderer2D` necesita el `SDL_Renderer*` que crea `Window`. `Window` ya
-expone `GetRenderer()` exactamente para ese propósito. `Application` puede
-crear el `SDLRenderer2D` pasándole ese puntero.
+`Window` solo debe gestionar la ventana (tamaño, título, handle nativo).
+El render debe ir por `IRenderer2D`.
 
-Hay que mirar cómo funciona `SDLRenderer2D`: no posee el renderer SDL,
-solo lo usa. La propiedad del renderer SDL sigue siendo de `Window`.
+Resultado: `Window::OnUpdate()` queda vacío o se elimina.
+
+**Paso 4: El bucle de `Application::Run()` usa el renderer.**
+
+```cpp
+void Application::Run()
+{
+    while (m_IsRunning)
+    {
+        Time::Update();
+
+        // Procesar eventos
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
+        {
+            Input::OnEvent(&event);
+            if (event.type == SDL_EVENT_QUIT)
+                m_IsRunning = false;
+        }
+
+        float dt = Time::GetDeltaTime();
+        OnUpdate(dt);
+
+        // Ciclo de render
+        m_Renderer->Clear({20, 20, 25, 255});
+        m_Renderer->BeginFrame();
+        // Aquí irán los draw calls cuando existan
+        m_Renderer->EndFrame();
+
+        Input::EndFrame();
+    }
+}
+```
 
 ### Qué se consigue con este paso
 
-- El bucle principal pasa por `IRenderer2D` en vez de por `Window`.
-- Añadir un backend OpenGL en el futuro solo requiere crear otro objeto
-  que implemente `IRenderer2D` y pasarlo.
-- `Window` queda con una sola responsabilidad.
+- `SDLRenderer2D` pasa a ser la pieza que produce la imagen.
+- `Window` queda limpia: solo gestiona ventana, no render.
+- El juego puede acceder a `IRenderer2D` para dibujar (cuando exista el
+  punto de extensión `Game`).
+- Añadir un backend OpenGL en el futuro solo requiere crear un
+  `OpenGLRenderer2D` y pasarlo en el constructor.
 
 ---
 
 ## 6. Fase 1 — Primitivas y formas básicas
 
-Antes de cargar imágenes, las formas simples son útiles para debug y prototipos.
-Con un rectángulo puedes representar un personaje. Con una línea puedes ver
-rayos de colisión. Sin necesitar ninguna imagen.
+Antes de cargar imágenes, es útil poder dibujar formas simples. Sirven para
+debug, prototipar físicas y entender el sistema antes de añadir complejidad.
 
-### Qué tipos nuevos hacen falta
+### Qué hay que añadir a IRenderer2D
 
-La interfaz necesita describir posición y tamaño de forma agnóstica al backend.
-Piensa qué estructura mínima representa "un rectángulo en el espacio 2D":
+```cpp
+// Un rectángulo con posición y tamaño
+struct Rect
+{
+    float x, y, w, h;
+};
 
-```txt
-Rect:
-  posición x, y
-  tamaño w, h
+class IRenderer2D
+{
+public:
+    // ... BeginFrame, EndFrame, Clear (ya existen)
+
+    // Relleno o borde según el parámetro filled
+    virtual void DrawRect(const Rect& rect, Color color, bool filled = true) = 0;
+
+    // Línea entre dos puntos
+    virtual void DrawLine(float x0, float y0, float x1, float y1, Color color) = 0;
+
+    // Círculo aproximado con segmentos de línea
+    virtual void DrawCircle(float cx, float cy, float radius, Color color) = 0;
+};
 ```
 
-Este tipo va en la interfaz pública, no en el backend.
+### Implementación en SDLRenderer2D
 
-### Qué métodos añadir a IRenderer2D
+`SDL_RenderFillRect` dibuja un rectángulo relleno. `SDL_RenderRect` dibuja
+solo el borde. `SDL_RenderLine` dibuja una línea.
 
-```txt
-DrawRect(rect, color, filled)
-  — filled=true: rectángulo relleno
-  — filled=false: solo el borde
+Para el círculo, SDL3 no tiene una función nativa. Se aproxima dibujando
+`N` segmentos de línea alrededor del centro:
 
-DrawLine(x0, y0, x1, y1, color)
-  — segmento entre dos puntos
+```cpp
+void SDLRenderer2D::DrawCircle(float cx, float cy, float radius, Color color)
+{
+    SDL_SetRenderDrawColor(m_Renderer, color.r, color.g, color.b, color.a);
 
-DrawCircle(cx, cy, radius, color)
-  — SDL no tiene función nativa para círculos
-  — se aproxima dibujando N segmentos de línea alrededor del centro
+    const int segments = 32;
+    for (int i = 0; i < segments; ++i)
+    {
+        float angle0 = (float)i / segments * 2.0f * M_PI;
+        float angle1 = (float)(i + 1) / segments * 2.0f * M_PI;
+
+        float x0 = cx + std::cos(angle0) * radius;
+        float y0 = cy + std::sin(angle0) * radius;
+        float x1 = cx + std::cos(angle1) * radius;
+        float y1 = cy + std::sin(angle1) * radius;
+
+        SDL_RenderLine(m_Renderer, x0, y0, x1, y1);
+    }
+}
 ```
 
-### Cómo implementar el círculo
+### Por qué es útil esto ahora
 
-SDL3 no tiene `DrawCircle`. La solución estándar es aproximarlo con líneas:
-dividir la circunferencia en N ángulos (por ejemplo 32), calcular los puntos
-en cada ángulo con trigonometría básica, y dibujar segmentos entre puntos
-consecutivos.
+Con solo formas puedes:
 
-Fórmula de punto en circunferencia para ángulo `a` y radio `r`:
-
-```txt
-punto.x = centro.x + cos(a) * r
-punto.y = centro.y + sin(a) * r
-```
-
-Con eso tienes todo lo necesario para implementarlo.
+- Ver los hitboxes de los personajes (cuadrados de colisión).
+- Depurar posiciones de entidades sin texturas.
+- Probar el sistema de cámara con objetos simples.
 
 ---
 
 ## 7. Fase 2 — Texturas y sprites
 
-Esta es la fase principal del renderizado visible.
+Esta es la fase principal del renderizado visible. Permite cargar imágenes
+y dibujarlas en pantalla.
 
 ### Qué es un sprite
 
-Un sprite es una imagen 2D dibujada en una posición del mundo.
+Un sprite es una imagen 2D que se dibuja en una posición del mundo.
 
-En la mayoría de motores, para dibujar un sprite necesitas:
+En la mayoría de motores, un sprite tiene:
 
-- La imagen (textura) que quieres dibujar.
-- `srcRect`: qué región de esa textura usar. Útil para sprite sheets donde
-  múltiples personajes o frames están en una sola imagen grande.
-- `dstRect`: dónde y con qué tamaño dibujarlo en pantalla.
+- Una textura (la imagen en memoria de GPU).
+- Un rectángulo fuente (`srcRect`): qué parte de la textura usar (útil para sprite sheets).
+- Un rectángulo destino (`dstRect`): dónde y con qué tamaño dibujarlo en pantalla.
 
 ```txt
 Textura completa (512x512 píxeles)
 ┌─────────────────────────────────────┐
 │                                     │
-│  ┌──────┐  ← srcRect (32x32 px)     │
-│  │ Img  │    la región que usamos   │
+│  ┌──────┐  srcRect (32x32)           │
+│  │ Img  │  La región que usamos     │
 │  └──────┘                           │
+│                                     │
 └─────────────────────────────────────┘
-                ↓ se dibuja en
-
+            ↓ se dibuja en
 ┌──────────────────────┐
 │ Pantalla             │
 │   ┌──────────────┐   │
-│   │   dstRect    │   │  puede tener distinto tamaño que el original
+│   │   dstRect    │   │  La posición y tamaño en pantalla
+│   │  (64x64 en   │   │  puede ser diferente al original
+│   │   pantalla)  │   │
 │   └──────────────┘   │
 └──────────────────────┘
 ```
 
-### Qué método añadir a IRenderer2D
+### Qué hay que añadir a IRenderer2D
 
-```txt
-DrawSprite(textura, srcRect, dstRect, rotation, tint)
-  — textura: referencia a la imagen
-  — srcRect: región fuente de la textura
-  — dstRect: posición y tamaño en pantalla
-  — rotation: grados de rotación (opcional, default 0)
-  — tint: color multiplicativo (opcional, default blanco = sin tinte)
+```cpp
+// Handle opaco a una textura (solo un número entero)
+using TextureHandle = uint32_t;
+static constexpr TextureHandle INVALID_TEXTURE = 0;
+
+class IRenderer2D
+{
+public:
+    // ... BeginFrame, EndFrame, Clear, DrawRect, DrawLine, DrawCircle
+
+    // Crear una textura a partir de datos en memoria (píxeles RGBA)
+    virtual TextureHandle CreateTexture(int width, int height,
+                                        const void* pixelData) = 0;
+
+    // Liberar una textura cuando ya no se necesita
+    virtual void DestroyTexture(TextureHandle handle) = 0;
+
+    // Dibujar un sprite
+    virtual void DrawSprite(TextureHandle texture,
+                            const Rect& src,
+                            const Rect& dst,
+                            float rotation = 0.0f,
+                            Color tint = {255, 255, 255, 255}) = 0;
+};
 ```
 
-El tinte blanco `(255, 255, 255, 255)` significa "dibujar la imagen sin
-modificar su color". Un tinte rojo haría que la imagen se vea rojiza.
+### Por qué TextureHandle es un número entero y no un puntero
 
-### SDL3 y el tipo para la textura
+Si `DrawSprite` recibiera un `SDL_Texture*`, la interfaz ya no sería abstracta.
+Un `OpenGLRenderer2D` no tiene `SDL_Texture`.
 
-SDL3 tiene `SDL_RenderTextureRotated` para dibujar con rotación. Busca en la
-documentación de SDL3 qué parámetros espera para entender qué tipos necesitas
-adaptar desde tu `Rect` y tu `Color`.
+Con un entero (`TextureHandle`), la interfaz es genérica. Cada backend mantiene
+internamente una tabla que traduce ese entero a su objeto real:
+
+```txt
+SDLRenderer2D internamente:
+  unordered_map<uint32_t, SDL_Texture*>
+
+OpenGLRenderer2D internamente:
+  unordered_map<uint32_t, GLuint>
+
+VulkanRenderer internamente:
+  unordered_map<uint32_t, VkImage>
+```
+
+El juego nunca sabe qué hay dentro. Solo usa el número.
+
+### Implementación en SDLRenderer2D
+
+`SDLRenderer2D` necesita un mapa y un contador para generar handles únicos:
+
+```cpp
+class SDLRenderer2D : public IRenderer2D
+{
+private:
+    SDL_Renderer* m_Renderer;
+    std::unordered_map<uint32_t, SDL_Texture*> m_Textures;
+    uint32_t m_NextHandle = 1;  // 0 es INVALID_TEXTURE
+};
+```
+
+`CreateTexture` crea la textura SDL y devuelve un handle:
+
+```cpp
+TextureHandle SDLRenderer2D::CreateTexture(int w, int h, const void* pixelData)
+{
+    // SDL_CreateTexture crea la textura en la GPU
+    SDL_Texture* tex = SDL_CreateTexture(
+        m_Renderer,
+        SDL_PIXELFORMAT_RGBA32,
+        SDL_TEXTUREACCESS_STATIC,
+        w, h
+    );
+
+    if (!tex) return INVALID_TEXTURE;
+
+    // Subir los píxeles a la GPU
+    SDL_UpdateTexture(tex, nullptr, pixelData, w * 4);
+
+    uint32_t handle = m_NextHandle++;
+    m_Textures[handle] = tex;
+    return handle;
+}
+```
+
+`DestroyTexture` libera la textura de la GPU:
+
+```cpp
+void SDLRenderer2D::DestroyTexture(TextureHandle handle)
+{
+    auto it = m_Textures.find(handle);
+    if (it != m_Textures.end())
+    {
+        SDL_DestroyTexture(it->second);
+        m_Textures.erase(it);
+    }
+}
+```
+
+`DrawSprite` traduce el handle a `SDL_Texture*` y llama a SDL:
+
+```cpp
+void SDLRenderer2D::DrawSprite(TextureHandle handle,
+                               const Rect& src,
+                               const Rect& dst,
+                               float rotation,
+                               Color tint)
+{
+    auto it = m_Textures.find(handle);
+    if (it == m_Textures.end()) return;
+
+    SDL_FRect sdlSrc {src.x, src.y, src.w, src.h};
+    SDL_FRect sdlDst {dst.x, dst.y, dst.w, dst.h};
+
+    SDL_SetTextureColorMod(it->second, tint.r, tint.g, tint.b);
+    SDL_SetTextureAlphaMod(it->second, tint.a);
+
+    SDL_RenderTextureRotated(m_Renderer, it->second,
+                              &sdlSrc, &sdlDst,
+                              rotation, nullptr, SDL_FLIP_NONE);
+}
+```
 
 ---
 
 ## 8. Fase 3 — Handles opacos
 
-Este concepto es una de las decisiones de arquitectura más importantes del motor
-y merece entenderse bien antes de implementar texturas.
+Este concepto ya se introdujo en la sección anterior pero merece explicarse
+por separado porque es una de las decisiones de arquitectura más importantes
+del motor.
 
-### El problema: ¿cómo referencia el juego a una textura?
+### El problema sin handles
 
-Opción A: puntero directo al objeto de la GPU.
+Si `Texture` fuera una clase que contiene `SDL_Texture*` internamente:
 
-```txt
-// El juego guarda un SDL_Texture*
-SDLTexture* miTextura = ...
-renderer.DrawSprite(miTextura, ...)
-```
-
-Problema: la interfaz `IRenderer2D` quedaría con tipos SDL en su firma. Un
-`OpenGLRenderer2D` no tiene `SDL_Texture`. La abstracción se rompe.
-
-Opción B: una clase `Texture` propia del motor.
-
-```txt
-class Texture {
-    SDL_Texture* m_SdlTexture;  // ← SDL se filtra al header público
-    GLuint m_GlTexture;         // ← y lo mismo con OpenGL
+```cpp
+class Texture
+{
+public:
+    SDL_Texture* m_SdlTexture;  // ← SDL se filtra a la interfaz
     int width, height;
 };
 ```
 
-Problema: para soportar múltiples backends, `Texture` se llenaría de miembros
-de cada backend. Sigue siendo una filtración.
+Para que `IRenderer2D::DrawSprite` funcione con OpenGL o Vulkan, habría que
+cambiar `Texture` para que tenga `GLuint` o `VkImage` también. La clase se
+llenaría de miembros condicionales por backend y la abstracción se rompería.
 
-Opción C: handle opaco (la solución correcta).
+### La solución: handles
 
-```txt
-using TextureHandle = uint32_t;  // solo un número entero
+Un handle es solo un número entero que identifica un recurso. No contiene
+datos internos del backend.
+
+```cpp
+using TextureHandle = uint32_t;
 ```
 
-El juego solo guarda ese número. El renderer mantiene internamente una tabla
-que traduce ese número al objeto real del backend:
+El recurso real (SDL_Texture, GLuint, VkImage) vive dentro del renderer, en
+una tabla privada. Solo el renderer sabe cómo traducir ese número.
 
-```txt
-SDLRenderer2D internamente:
-  tabla[1] → SDL_Texture* A
-  tabla[2] → SDL_Texture* B
+### La regla
 
-OpenGLRenderer2D internamente:
-  tabla[1] → GLuint A
-  tabla[2] → GLuint B
-```
+Ningún tipo expuesto en `engine/include/Render/IRenderer2D.h` puede incluir
+headers de SDL, OpenGL o Vulkan.
 
-El juego llama a `DrawSprite(handle=1, ...)` sin saber qué hay dentro.
+Solo pueden aparecer:
 
-### Qué métodos implica esto en IRenderer2D
-
-```txt
-CreateTexture(ancho, alto, datos_de_pixeles) → TextureHandle
-  — sube los píxeles a GPU y devuelve un handle
-
-DestroyTexture(handle)
-  — libera la textura de GPU
-
-DrawSprite(handle, srcRect, dstRect, ...)
-  — dibuja la textura identificada por ese handle
-```
-
-### La regla clave
-
-Ningún tipo en `engine/include/Render/IRenderer2D.h` puede venir de SDL,
-OpenGL o Vulkan. Solo tipos primitivos (`uint32_t`, `float`) y tipos propios
-del motor (`Color`, `Rect`, `TextureHandle`).
+- Tipos primitivos (`uint32_t`, `float`, `int`).
+- Tipos propios del motor (`Color`, `Rect`, `TextureHandle`).
+- Clases abstractas del motor (`IRenderer2D`).
 
 ---
 
@@ -411,46 +550,81 @@ entrega al juego como handles.
 
 ### Por qué es necesario
 
-Sin `ResourceManager`, el juego tendría que:
+Sin `ResourceManager`, el juego haría esto:
 
-1. Leer el archivo PNG desde disco.
-2. Decodificarlo a píxeles RGBA.
-3. Llamar a `CreateTexture` en el renderer.
-4. Recordar destruir esa textura manualmente al terminar.
-
-Además, si dos sistemas cargan la misma imagen independientemente, se subirían
-dos copias idénticas a la GPU. Desperdicio.
-
-### Qué hace
-
-```txt
-ResourceManager::Load("jugador.png") → TextureHandle
-  — si ya estaba cargada: devuelve el handle existente (caché)
-  — si no: lee el archivo, decodifica, sube a GPU, guarda en caché
-
-ResourceManager::Unload("jugador.png")
-  — libera la textura de GPU y borra de caché
+```cpp
+// Cargar la imagen desde disco
+auto pixelData = LoadPNG("player.png");  // ¿cómo? ¿con qué librería?
+TextureHandle handle = renderer.CreateTexture(64, 64, pixelData.data());
 ```
 
-La caché es simplemente una tabla `nombre_de_archivo → handle`.
+Esto tiene problemas:
 
-### Cómo cargar imágenes PNG
+- Si dos sistemas cargan la misma imagen, se subirían dos copias a la GPU.
+- La imagen se cargaría de disco cada vez.
+- Liberar la textura manualmente es propenso a errores.
 
-SDL3 puede cargar imágenes con `SDL_LoadBMP` para BMP. Para PNG y JPG la
-opción recomendada en el plan de acción a corto plazo es `SDL_image`.
+Con `ResourceManager`:
 
-A largo plazo, `stb_image` es una librería header-only (un solo `.h`) que
-carga PNG, JPG, BMP y otros formatos sin depender de SDL. Buscala en GitHub:
-`nothings/stb`. El archivo relevante es `stb_image.h`.
+```cpp
+TextureHandle handle = resources.Load("player.png");
+// Si ya estaba cargada, devuelve el mismo handle
+// Si no, la carga, sube a GPU y la cachea
+```
 
-El flujo de carga con cualquier librería es:
+### Estructura básica
 
-```txt
-leer archivo del disco
-obtener: ancho, alto, puntero a datos RGBA
-llamar a renderer.CreateTexture(ancho, alto, datos)
-liberar la memoria de los datos (ya están en GPU)
-guardar el handle en la caché
+```cpp
+class ResourceManager
+{
+public:
+    // Carga una textura desde disco o devuelve la cacheada
+    TextureHandle Load(const std::string& path);
+
+    // Libera explícitamente (opcional, puede hacerse automático)
+    void Unload(const std::string& path);
+
+private:
+    IRenderer2D* m_Renderer;
+    std::unordered_map<std::string, TextureHandle> m_Cache;
+};
+```
+
+### Carga de imágenes con stb_image
+
+Para cargar PNG, JPG, BMP sin depender de SDL_image, se usa `stb_image`.
+Es una librería header-only: un solo archivo `.h` que se incluye en el proyecto.
+
+```cpp
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+TextureHandle ResourceManager::Load(const std::string& path)
+{
+    // Si ya existe en caché, devolver el handle existente
+    auto it = m_Cache.find(path);
+    if (it != m_Cache.end())
+        return it->second;
+
+    // Cargar la imagen desde disco
+    int width, height, channels;
+    // stbi_load devuelve puntero a datos RGBA en heap
+    uint8_t* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+
+    if (!data)
+    {
+        EE_LOG_ERROR("No se pudo cargar textura: " + path);
+        return INVALID_TEXTURE;
+    }
+
+    // Subir a GPU a través del renderer
+    TextureHandle handle = m_Renderer->CreateTexture(width, height, data);
+
+    stbi_image_free(data);  // Liberar memoria CPU
+
+    m_Cache[path] = handle;
+    return handle;
+}
 ```
 
 ---
@@ -462,165 +636,255 @@ La cámara define qué parte del mundo es visible en pantalla.
 ### El problema sin cámara
 
 Sin cámara, las coordenadas del juego son directamente píxeles de pantalla.
-Si el jugador está en la posición `(500, 300)` del mundo, se dibuja en el
-píxel `(500, 300)` de la ventana.
+Si el jugador está en la posición (500, 300) del mundo, se dibuja en el
+píxel (500, 300) de la ventana.
 
 Esto funciona si el nivel cabe en pantalla. En cuanto el nivel es más grande,
-el jugador desaparece fuera del borde.
+el jugador desaparece fuera del borde de la pantalla.
 
 ### Qué es una cámara 2D
 
 La cámara define un punto del mundo que aparece en el centro de la pantalla,
-y un zoom que determina cuánto mundo es visible:
+y un zoom que determina cuánto mundo es visible.
 
-```txt
-Camera2D:
-  posición x, y  — punto del mundo centrado en pantalla
-  zoom           — 1.0=normal, 2.0=más cerca, 0.5=más lejos
+```cpp
+struct Camera2D
+{
+    float x = 0.0f;     // punto del mundo en el centro de pantalla
+    float y = 0.0f;
+    float zoom = 1.0f;  // 1.0 = normal, 2.0 = doble de zoom (más cerca)
+};
 ```
 
 ### La transformación mundo → pantalla
 
-Para saber dónde dibujar un objeto del mundo en pantalla, la fórmula es:
+Para saber dónde dibujar un objeto del mundo en pantalla, se aplica la
+transformación de cámara:
 
 ```txt
-screenX = (worldX - camera.x) * zoom + (ancho_pantalla / 2)
-screenY = (worldY - camera.y) * zoom + (alto_pantalla / 2)
+screenX = (worldX - camera.x) * zoom + pantalla_ancho / 2
+screenY = (worldY - camera.y) * zoom + pantalla_alto / 2
 ```
 
-Ejemplo con cámara en `(200, 150)`, zoom `1.0`, pantalla `800x600`:
+Ejemplo:
 
 ```txt
-Objeto en el mundo en (220, 160):
+Camera en posición (200, 150), zoom 1.0, pantalla 800x600
+
+Objeto del mundo en (220, 160):
   screenX = (220 - 200) * 1.0 + 400 = 420
   screenY = (160 - 150) * 1.0 + 300 = 310
+
+El objeto se dibuja en el píxel (420, 310) de pantalla.
 ```
 
-Con zoom `2.0`, el mismo objeto:
+Ejemplo con zoom 2.0:
 
 ```txt
+Objeto del mundo en (220, 160):
   screenX = (220 - 200) * 2.0 + 400 = 440
   screenY = (160 - 150) * 2.0 + 300 = 320
+
+Con más zoom, el objeto aparece más lejos del centro (efecto de acercamiento).
 ```
 
-Con más zoom el objeto se aleja más del centro, porque el mundo se ve
-"más grande" relativamente.
+### Implementación en IRenderer2D
+
+La cámara se pasa al renderer para que aplique la transformación a todos los
+draw calls posteriores:
+
+```cpp
+class IRenderer2D
+{
+public:
+    // ... métodos existentes
+
+    virtual void SetCamera(const Camera2D& camera) = 0;
+    virtual Camera2D GetCamera() const = 0;
+
+    // Para UI que debe dibujarse en coordenadas de pantalla
+    // (salud, puntuación, menús), ignorando la cámara del mundo
+    virtual void BeginScreenSpace() = 0;
+    virtual void EndScreenSpace() = 0;
+};
+```
+
+### Implementación en SDLRenderer2D
+
+SDL3 tiene `SDL_SetRenderScale` para aplicar zoom global y `SDL_SetRenderViewport`
+para el offset de cámara.
+
+```cpp
+void SDLRenderer2D::SetCamera(const Camera2D& camera)
+{
+    m_Camera = camera;
+
+    // Aplicar zoom
+    SDL_SetRenderScale(m_Renderer, camera.zoom, camera.zoom);
+
+    // Calcular offset de la cámara
+    // El origen del mundo en pantalla después del zoom
+    SDL_FRect viewport = {
+        -(camera.x * camera.zoom - m_ScreenWidth * 0.5f),
+        -(camera.y * camera.zoom - m_ScreenHeight * 0.5f),
+        (float)m_ScreenWidth,
+        (float)m_ScreenHeight
+    };
+    SDL_SetRenderViewport(m_Renderer, nullptr);
+}
+```
 
 ### La transformación inversa (pantalla → mundo)
 
-Necesaria para saber en qué punto del mundo hizo click el ratón:
+Necesaria para saber en qué punto del mundo hizo click el jugador:
 
-```txt
-worldX = (screenX - ancho_pantalla / 2) / zoom + camera.x
-worldY = (screenY - alto_pantalla / 2) / zoom + camera.y
+```cpp
+// Convertir una posición de pantalla (ej: posición del ratón)
+// a coordenada del mundo
+float worldX = (screenX - pantalla_ancho / 2.0f) / zoom + camera.x;
+float worldY = (screenY - pantalla_alto / 2.0f) / zoom + camera.y;
+```
+
+Se expone como función helper:
+
+```cpp
+class IRenderer2D
+{
+public:
+    virtual glm::vec2 ScreenToWorld(glm::vec2 screenPos) const = 0;
+    virtual glm::vec2 WorldToScreen(glm::vec2 worldPos) const = 0;
+};
 ```
 
 ### Mundo vs espacio de pantalla (UI)
 
 La cámara afecta todo lo que se dibuja. Pero la UI (barra de salud, puntuación,
-menús) debe dibujarse en posiciones fijas de pantalla, no del mundo.
+menús) debe dibujarse en coordenadas fijas de pantalla, no del mundo.
 
-El motor necesita un modo "espacio de pantalla" donde la transformación de
-cámara se ignora:
+Por eso existen `BeginScreenSpace()` y `EndScreenSpace()`. Entre esas llamadas,
+la transformación de cámara se ignora:
 
-```txt
+```cpp
 // Dibujar el mundo (afectado por la cámara)
-renderer.SetCamera(gameCamera)
-renderer.DrawSprite(jugador, ...)
-renderer.DrawSprite(enemigo, ...)
+renderer.SetCamera(gameCamera);
+renderer.DrawSprite(playerTexture, src, worldDst);
+renderer.DrawSprite(enemyTexture, src, worldDst);
 
 // Dibujar la UI (siempre en la misma posición de pantalla)
-renderer.BeginScreenSpace()
-renderer.DrawSprite(barraSalud, posicionFija)
-renderer.EndScreenSpace()
+renderer.BeginScreenSpace();
+renderer.DrawSprite(healthBarTexture, src, {10, 10, 200, 30});
+renderer.EndScreenSpace();
 ```
-
-### Cómo implementarlo en SDL3
-
-SDL3 tiene funciones que permiten aplicar escala y offset global al renderer.
-Busca `SDL_SetRenderScale` y cómo afecta a todas las llamadas de dibujo
-posteriores. Eso es el mecanismo que implementa el zoom de la cámara.
-
-El offset de la cámara (desplazamiento del mundo) puede aplicarse de varias
-formas: modificando el viewport o ajustando manualmente las coordenadas antes
-de cada draw call. La primera opción es más limpia.
 
 ---
 
 ## 11. Reglas que debe respetar el sistema
+
+Estas reglas vienen del plan de acción del proyecto y son críticas para que
+el sistema sea extensible en el futuro.
 
 ### Regla 1: Ningún header público puede incluir SDL
 
 Todo lo que está en `engine/include/` debe ser legible sin que el proyecto que
 lo usa tenga SDL en su include path.
 
-Los `.cpp` del motor sí pueden incluir SDL. Los `.h` públicos no.
+Correcto:
 
-Esta regla ya se cumple en `Window.h` (usa forward declaration `struct SDL_Window;`).
-Debe respetarse en todo lo nuevo que se añada.
+```cpp
+// engine/include/Render/IRenderer2D.h
+#pragma once
+#include <cstdint>
+// No hay ningún #include <SDL3/SDL.h>
+
+struct Color { uint8_t r, g, b, a; };
+using TextureHandle = uint32_t;
+
+class IRenderer2D { ... };
+```
+
+Incorrecto:
+
+```cpp
+// engine/include/Render/IRenderer2D.h
+#include <SDL3/SDL.h>  // ← rompe la abstracción
+```
 
 ### Regla 2: Los tipos de la interfaz son agnósticos al backend
 
 `Color`, `Rect`, `TextureHandle` son tipos propios del motor. No son tipos SDL,
-OpenGL ni Vulkan. Si la firma de un método en `IRenderer2D.h` menciona
-`SDL_Texture` o `SDL_FRect`, algo está mal.
+OpenGL ni Vulkan.
+
+Correcto:
+
+```cpp
+virtual void DrawSprite(TextureHandle tex, const Rect& dst) = 0;
+```
+
+Incorrecto:
+
+```cpp
+virtual void DrawSprite(SDL_Texture* tex, SDL_FRect dst) = 0;  // ← SDL en la interfaz
+```
 
 ### Regla 3: El renderer no posee la ventana
 
-`SDLRenderer2D` recibe el `SDL_Renderer*` externo pero no es dueño de él.
-No debe destruirlo. La ventana lo crea y lo destruye.
+`SDLRenderer2D` recibe un `SDL_Renderer*` externo. La ventana (y el renderer SDL)
+los posee y gestiona la clase `Window`. El destructor de `SDLRenderer2D` no
+debe llamar `SDL_DestroyRenderer`.
 
-Esto ya está correcto en el código actual. Hay que mantenerlo al ampliar.
+Esto ya se cumple en el código actual.
 
-### Regla 4: La vida de las texturas la gestiona el ResourceManager
+### Regla 4: La vida de las texturas la gestiona el renderer
 
 Una textura creada con `CreateTexture` debe ser destruida con `DestroyTexture`
-antes de que el renderer se destruya. El `ResourceManager` es quien sabe qué
-texturas están vivas. El juego no destruye texturas directamente.
+antes de que el renderer se destruya. El `ResourceManager` es responsable de
+esto, no el código del juego directamente.
 
 ---
 
 ## 12. Orden de implementación recomendado
 
-### Paso 1 — Conectar IRenderer2D (Fase 0.3 del plan)
+Siguiendo las fases del plan de acción:
+
+### Paso 1 — Conectar IRenderer2D (Fase 0.3)
 
 Este paso desbloquea todo lo demás.
 
-1. Hacer que `Application` posea un `IRenderer2D`.
-2. Construirlo con el renderer SDL que expone `Window`.
-3. Reemplazar el render en `Window::OnUpdate()` por llamadas al renderer.
-4. Verificar que la ventana sigue mostrando el color de fondo.
-
-Criterio de éxito: `Window::OnUpdate()` ya no hace clear ni present. El
-renderer los hace.
+1. En `Application.h`: añadir `std::unique_ptr<IRenderer2D> m_Renderer`.
+2. En `Application.cpp`: construir `SDLRenderer2D` con `m_Window->GetRenderer()`.
+3. En `Application::Run()`: llamar `Clear`, `BeginFrame`, `EndFrame` desde el renderer.
+4. Vaciar `Window::OnUpdate()` (ya no hace el render).
+5. Compilar y verificar que la ventana sigue mostrando el color de fondo.
 
 ### Paso 2 — Primitivas (Fase 1 parcial)
 
-1. Añadir `Rect` a la interfaz pública.
+1. Añadir `struct Rect` a `IRenderer2D.h`.
 2. Añadir `DrawRect`, `DrawLine`, `DrawCircle` a `IRenderer2D`.
 3. Implementar los tres métodos en `SDLRenderer2D`.
-4. Probar dibujando formas en pantalla desde el punto de extensión del juego.
+4. Probar dibujando un rectángulo en `Application::OnUpdate`.
 
 ### Paso 3 — TextureHandle y DrawSprite (Fase 1)
 
-1. Definir `TextureHandle` como alias de entero y el valor de handle inválido.
+1. Añadir `using TextureHandle = uint32_t` y `INVALID_TEXTURE` a `IRenderer2D.h`.
 2. Añadir `CreateTexture`, `DestroyTexture`, `DrawSprite` a `IRenderer2D`.
-3. Implementar en `SDLRenderer2D` con la tabla interna de handles.
-4. Probar con datos de píxeles hardcodeados (un cuadrado de color sólido).
+3. En `SDLRenderer2D`: añadir el mapa interno y el contador de handles.
+4. Implementar `CreateTexture`, `DestroyTexture`, `DrawSprite`.
+5. Probar con datos de píxeles hardcodeados (un cuadrado de color sólido).
 
 ### Paso 4 — ResourceManager (Fase 1)
 
-1. Integrar stb_image o SDL_image para decodificar PNG.
-2. Implementar `Load` con caché y `Unload`.
-3. Conectar `ResourceManager` al renderer.
-4. Probar cargando un PNG real desde disco.
+1. Añadir `stb_image.h` al proyecto en `external/`.
+2. Crear `engine/include/Resources/ResourceManager.h`.
+3. Crear `engine/src/Resources/ResourceManager.cpp`.
+4. Implementar `Load` con caché y `Unload`.
+5. Probar cargando un PNG real desde disco.
 
 ### Paso 5 — Camera2D (Fase 2)
 
-1. Definir `Camera2D` con posición y zoom.
-2. Añadir `SetCamera`, `BeginScreenSpace`, `EndScreenSpace` a `IRenderer2D`.
-3. Añadir `ScreenToWorld` y `WorldToScreen` como helpers.
-4. Implementar en `SDLRenderer2D`.
+1. Añadir `struct Camera2D` a `IRenderer2D.h`.
+2. Añadir `SetCamera`, `GetCamera`, `BeginScreenSpace`, `EndScreenSpace` a `IRenderer2D`.
+3. Implementar en `SDLRenderer2D` usando `SDL_SetRenderScale`.
+4. Añadir `ScreenToWorld` y `WorldToScreen`.
 5. Probar moviendo la cámara con teclas.
 
 ---

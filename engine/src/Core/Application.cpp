@@ -39,7 +39,6 @@ namespace EntityEngine
 
         m_Renderer2D = std::make_unique<SDLRenderer2D>(m_Window->GetRenderer());
 
-
         // Activa el reloj para medir el delta time desde el primer frame.
         Time::Init();
         m_IsRunning = true;
@@ -98,8 +97,6 @@ namespace EntityEngine
 
             m_Renderer2D->BeginFrame();
             m_Renderer2D->Clear({20, 20, 25, 255});
-
-            // Aquí después irán las llamadas de render del juego/escena.
 
             m_Renderer2D->EndFrame();
 

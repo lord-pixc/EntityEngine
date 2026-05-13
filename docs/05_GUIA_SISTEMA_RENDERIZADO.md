@@ -352,7 +352,7 @@ En la mayoría de motores, un sprite tiene:
 Textura completa (512x512 píxeles)
 ┌─────────────────────────────────────┐
 │                                     │
-│  ┌──────┐  srcRect (32x32)           │
+│  ┌──────┐  srcRect (32x32)          │
 │  │ Img  │  La región que usamos     │
 │  └──────┘                           │
 │                                     │

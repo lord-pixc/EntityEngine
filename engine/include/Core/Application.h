@@ -5,6 +5,7 @@
 
 namespace EntityEngine
 {
+    class Game;
     class IRenderer2D;
     class Window;
 
@@ -41,17 +42,12 @@ namespace EntityEngine
          * si la construcción de la aplicación fue exitosa.
          */
         void Run();
+        void Run(Game &game);
 
     private:
         bool m_IsRunning;          ///< Señala si el bucle principal sigue activo.
         bool m_SdlInitialized;     ///< Indica si SDL se inicializó para limpiar en el destructor.
         std::unique_ptr<Window> m_Window; ///< Ventana principal de la aplicación.
         std::unique_ptr<IRenderer2D> m_Renderer2D; ///< Sistema de renderizado 2D (inicialmente nulo).
-
-        /**
-         * @brief Punto de extensión para lógica personalizada por frame.
-         * @param deltaTime Tiempo transcurrido desde el último frame (en segundos).
-         */
-        void OnUpdate(float deltaTime);
     };
 }
